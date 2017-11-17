@@ -1,0 +1,12 @@
+#!nsh
+#
+# Standard apps for unmanned ground vehicles (UGV)
+#
+
+#
+# Start the attitude and position estimator
+#
+ekf2 start
+uuv_att_control start
+logger start -t -r 100 -e -b 16
+
