@@ -20,6 +20,7 @@ set(config_module_list
 	drivers/l3gd20
 	drivers/hmc5883
 	drivers/ms5611
+	drivers/ms5803 #Pressure Driver
 	#drivers/mb12xx
 	#drivers/srf02
 	drivers/sf0x
@@ -96,6 +97,13 @@ set(config_module_list
 	#modules/uavcan
 	modules/land_detector
 	modules/camera_feedback
+	#
+        # Localization and Control App
+	#
+        modules/ekf_position
+        #modules/water_depth_control_2
+	modules/raw_pressure
+
 
 	#
 	# Estimation modules
