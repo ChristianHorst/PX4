@@ -951,7 +951,7 @@ MavlinkReceiver::handle_message_set_position_target_local_ned(mavlink_message_t 
                         pos_sp_triplet.current.vz = set_position_target_local_ned.vz; //test
 
 
-                    /*Set the absoilut ekf position values and the ekf covariance values */
+                    /*Set the absolut ekf position values and the ekf covariance values */
                         ekf_vector.EKF_pos_x = pos_sp_triplet.current.x;
                         ekf_vector.EKF_pos_y = pos_sp_triplet.current.y;
                         ekf_vector.EKF_covar_00 = pos_sp_triplet.current.z;

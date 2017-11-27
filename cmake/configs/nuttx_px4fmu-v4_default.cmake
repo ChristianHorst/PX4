@@ -37,6 +37,7 @@ set(config_module_list
 	drivers/ms4525_airspeed
 	drivers/ms5525_airspeed
 	drivers/ms5611
+        drivers/ms5803 #Pressure Driver
 	drivers/oreoled
 	drivers/pca9685
 	drivers/pwm_input
@@ -78,6 +79,15 @@ set(config_module_list
 	systemcmds/top
 	systemcmds/topic_listener
 	systemcmds/ver
+
+
+        #
+        # Localization and Control App
+        #
+        modules/ekf_position
+        #modules/water_depth_control_2
+        modules/raw_pressure
+
 
 	#
 	# Testing

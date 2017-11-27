@@ -97,7 +97,6 @@
 #include <uORB/topics/vehicle_rates_setpoint.h>
 #include <uORB/topics/manual_control_setpoint.h>
 #include <uORB/topics/actuator_controls.h>
-/*#include <uORB/topics/control_state.h>*/
 #include <uORB/topics/parameter_update.h>
 #include <uORB/topics/pressure.h>
 #include <systemlib/param/param.h>
@@ -111,6 +110,7 @@
 #include <uORB/topics/adc_report.h> // includes ADC readings
 #include <uORB/topics/vehicle_local_position.h>
 #include <uORB/topics/att_pos_mocap.h>
+
 
 
 extern "C" __EXPORT int ekf_position_main(int argc, char *argv[]);
@@ -140,9 +140,19 @@ private:
     bool	_task_should_exit;		/**< if true, task_main() should exit */
     int		_control_task;			/**< task handle */
 
-
+    float   water_depth;
+    float      _roh_g;
+    float      _p_zero;
     int subscribed_ekf_vector_int;
+    int        _pressure_raw;
+    int        counter;
+    int  att_pos_mocap_int;
 
+    orb_advert_t	att_pos_mocap_pub;		/**< attitude_pos_mocap publication */
+
+    struct att_pos_mocap_s _mocap_vec;
+
+    
        /**
      * Check for ekf updates from Pi0 and handle it.
      */
@@ -168,11 +178,13 @@ namespace ekf_position
 
 Read_EKF_Data::Read_EKF_Data() :
 
+
     _task_should_exit(false),
     _control_task(-1),
     subscribed_ekf_vector_int(-1)
 {
-
+    _roh_g = 98.1;
+    counter = 1;
 }
 
 Read_EKF_Data::~Read_EKF_Data()
@@ -204,6 +216,24 @@ void Read_EKF_Data::ekf_update_poll()
 {
     bool updated;
 
+    orb_check( _pressure_raw, &updated);
+
+    if (updated) {
+                struct pressure_s press;
+
+                /* get pressure value from sensor*/
+                orb_copy(ORB_ID(pressure), _pressure_raw, &press);
+
+                /* set surface air pressure  */
+                if (counter == 1){
+                    _p_zero = press.pressure_mbar;
+                    counter = 0;
+                }
+
+                /* calculate actual water depth */
+                water_depth = ( press.pressure_mbar - _p_zero ) / ( _roh_g ); //unit meter
+
+}
     /* Check if parameters have changed */
     orb_check(subscribed_ekf_vector_int, &updated);
 
@@ -212,22 +242,50 @@ void Read_EKF_Data::ekf_update_poll()
         struct ekf_vector_s subscribed_ekf_vector;
         orb_copy(ORB_ID(ekf_vector), subscribed_ekf_vector_int, &subscribed_ekf_vector);
 
+
         /* Print the updatet absolut position and ekf covariance*/
+        /*
         PX4_INFO("EKF_Position:\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f",
                                        (double)subscribed_ekf_vector.EKF_pos_x,
-                                       (double)subscribed_ekf_vector.EKF_pos_x,
+                                       (double)subscribed_ekf_vector.EKF_pos_y,
                                        (double)subscribed_ekf_vector.EKF_covar_00,
                                        (double)subscribed_ekf_vector.EKF_covar_01,
                                        (double)subscribed_ekf_vector.EKF_covar_10,
                                        (double)subscribed_ekf_vector.EKF_covar_11);
-
-         /* If you need to now how many times the Pixhawk updates the EKF_data*/
-         /*
-        PX4_INFO("Number of received positions:\t%.4f",
-                                       (double)n);
-                                       n=n+1;
         */
-    }
+        _mocap_vec.x = subscribed_ekf_vector.EKF_pos_x;
+        _mocap_vec.y = subscribed_ekf_vector.EKF_pos_y;
+
+
+         }
+
+
+
+    /* Check if parameters have changed */
+  /*  orb_check(att_pos_mocap_int, &updated);
+
+    if (updated) {
+
+        */
+        /* read from param to clear updated flag (uORB API requirement) */
+
+        orb_copy(ORB_ID(ekf_vector), att_pos_mocap_int, &_mocap_vec);
+
+        /* give the mocap topic the new values*/
+
+        _mocap_vec.z = water_depth;
+
+        /* Print the updatet absolut position and ekf covariance*/
+        PX4_INFO("Mocap_Position:\t%.4f\t%.4f\t%.4f",
+                                       (double)_mocap_vec.x,
+                                       (double)_mocap_vec.y,
+                                       (double)_mocap_vec.z);
+
+
+
+
+//}
+
 }
 
 
@@ -237,7 +295,11 @@ void Read_EKF_Data::ekf_update_poll()
 void Read_EKF_Data::task_main()
 {
 
+ _pressure_raw = orb_subscribe(ORB_ID(pressure));
 subscribed_ekf_vector_int = orb_subscribe(ORB_ID(ekf_vector));
+att_pos_mocap_int = orb_subscribe(ORB_ID(att_pos_mocap));
+
+
 
 	while (!_task_should_exit) {
 
@@ -245,6 +307,9 @@ subscribed_ekf_vector_int = orb_subscribe(ORB_ID(ekf_vector));
            ekf_update_poll();
 
      }
+      att_pos_mocap_pub = orb_advertise(ORB_ID(att_pos_mocap), &_mocap_vec);
+      orb_publish(ORB_ID(att_pos_mocap), att_pos_mocap_pub, &_mocap_vec);
+
 }
 
 void Read_EKF_Data::task_main_trampoline(int argc, char *argv[])
