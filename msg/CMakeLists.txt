@@ -127,6 +127,8 @@ set(msg_files
 	wind_estimate.msg
 	ekf_vector.msg
 	pressure.msg
+        trajectory_setpoint.msg
+        logging_hippocampus.msg
 	)
 
 px4_add_git_submodule(TARGET git_gencpp PATH tools/gencpp)

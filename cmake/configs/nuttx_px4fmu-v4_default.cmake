@@ -87,6 +87,7 @@ set(config_module_list
         modules/ekf_position
         #modules/water_depth_control_2
         modules/raw_pressure
+        modules/path_controller
 
 
 	#
