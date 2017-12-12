@@ -61,6 +61,13 @@ int BlockLocalPositionEstimator::visionMeasure(Vector<float, n_y_vision> &y)
 	y(Y_vision_z) = _sub_vision_pos.get().z;
 	_visionStats.update(y);
 	_time_last_vision_p = _sub_vision_pos.get().timestamp;
+
+    /* Print the vision vector*/
+    PX4_INFO("Start Vision!");
+     /*  PX4_INFO("Vision_Position:\t%.4f\t%.4f\",
+                                     (double)y(Y_vision_x),
+                                     (double)y(Y_vision_y));
+*/
 	return OK;
 }
 

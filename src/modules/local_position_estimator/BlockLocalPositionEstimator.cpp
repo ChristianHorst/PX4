@@ -12,6 +12,8 @@ orb_advert_t mavlink_log_pub = nullptr;
 static const uint32_t 		EST_STDDEV_XY_VALID = 2.0; // 2.0 m
 static const uint32_t 		EST_STDDEV_Z_VALID = 2.0; // 2.0 m
 static const uint32_t 		EST_STDDEV_TZ_VALID = 2.0; // 2.0 m
+      double n=1; //counter
+      double k=1; //counter
 
 static const float P_MAX = 1.0e6f; // max allowed value in state covariance
 static const float LAND_RATE = 10.0f; // rate of land detector correction
@@ -35,10 +37,12 @@ BlockLocalPositionEstimator::BlockLocalPositionEstimator() :
 	// gps 10 hz
 	_sub_gps(ORB_ID(vehicle_gps_position), 1000 / 10, 0, &getSubscriptions()),
 	// vision 50 hz
-	_sub_vision_pos(ORB_ID(vehicle_vision_position), 1000 / 50, 0, &getSubscriptions()),
+    _sub_vision_pos(ORB_ID(vehicle_vision_position), 1000 / 50, 0, &getSubscriptions()),
+    //_sub_vision_pos(ORB_ID(att_pos_mocap), 1000 / 50, 0, &getSubscriptions()), // Use Mocap topic for vision
 	// mocap 50 hz
-	_sub_mocap(ORB_ID(att_pos_mocap), 1000 / 50, 0, &getSubscriptions()),
-	// all distance sensors, 10 hz
+    _sub_mocap(ORB_ID(att_pos_mocap), 1000 / 50, 0, &getSubscriptions()),
+    //_sub_mocap(ORB_ID(vehicle_vision_position), 1000 / 50, 0, &getSubscriptions()), //change to vision topic since don't want it
+    // all distance sensors, 10 hz
 	_sub_dist0(ORB_ID(distance_sensor), 1000 / 10, 0, &getSubscriptions()),
 	_sub_dist1(ORB_ID(distance_sensor), 1000 / 10, 1, &getSubscriptions()),
 	_sub_dist2(ORB_ID(distance_sensor), 1000 / 10, 2, &getSubscriptions()),
@@ -494,6 +498,7 @@ void BlockLocalPositionEstimator::update()
 	}
 
 	if (visionUpdated) {
+        PX4_INFO("Got Vision update");
 		if (_sensorTimeout & SENSOR_VISION) {
 			visionInit();
 
@@ -501,15 +506,38 @@ void BlockLocalPositionEstimator::update()
 			visionCorrect();
 		}
 	}
-
+/*
 	if (mocapUpdated) {
-		if (_sensorTimeout & SENSOR_MOCAP) {
+        //PX4_INFO("Got Mocap update");
+    //    PX4_INFO("sensorTimeout + Sensor_Mocap:\t%.4f\t%.4f",
+      //       (double)_sensorTimeout,
+       //     (double)SENSOR_MOCAP );
+        if (_sensorTimeout & SENSOR_MOCAP) {
 			mocapInit();
-
+            //  PX4_INFO("Got Mocap Init");
 		} else {
 			mocapCorrect();
+            //PX4_INFO("Got Mocap correct");
 		}
 	}
+*/
+
+    /* Since we never achieved the mocapCorrect() loop, I changed the loop*/
+    if (mocapUpdated) {
+
+        if (k<2) {
+            mocapInit();
+            k = k+1;
+            PX4_INFO("Got Mocap Init");
+        } else {
+            mocapCorrect();
+            k=k+1;
+                if(k>20){
+                    k=1;
+                }
+            PX4_INFO("Got Mocap correct");
+        }
+    }
 
 	if (landUpdated) {
 		if (_sensorTimeout & SENSOR_LAND) {
@@ -600,12 +628,27 @@ void BlockLocalPositionEstimator::publishLocalPos()
 		_pub_lpos.get().x = xLP(X_x); 	// north
 		_pub_lpos.get().y = xLP(X_y);  	// east
 
+
+
 		if (_fusion.get() & FUSE_PUB_AGL_Z) {
 			_pub_lpos.get().z = -_aglLowPass.getState(); // agl
 
 		} else {
 			_pub_lpos.get().z = xLP(X_z); 	// down
 		}
+/*
+        n=n+1;
+       if (n>100){
+          PX4_INFO("Estimatet Position:\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f",
+               (double)xLP(X_x),
+               (double)xLP(X_y),
+               (double)xLP(X_z),
+               (double)_x(X_x),
+               (double)_x(X_y),
+               (double)_x(X_z) );
+
+           n=1;
+           }*/
 
 		_pub_lpos.get().vx = xLP(X_vx); // north
 		_pub_lpos.get().vy = xLP(X_vy); // east
@@ -634,7 +677,12 @@ void BlockLocalPositionEstimator::publishLocalPos()
 		//TODO provide calculated values for these
 		_pub_lpos.get().evh = 0.0f;
 		_pub_lpos.get().evv = 0.0f;
+
+
 	}
+
+
+
 }
 
 void BlockLocalPositionEstimator::publishEstimatorStatus()
@@ -870,7 +918,17 @@ void BlockLocalPositionEstimator::predict()
 	_x += dx;
 	Matrix<float, n_x, n_x> dP = (_A * _P + _P * _A.transpose() +
 				      _B * _R * _B.transpose() + _Q) * getDt();
+/*
+    k=k+1;
+   if (k>100){
+      PX4_INFO("Predict Position:\t%.4f\t%.4f\t%.4f",
+           (double)_x(X_x),
+           (double)_x(X_y),
+           (double)_x(X_z) );
 
+       k=1;
+       }
+*/
 	// covariance propagation logic
 	for (int i = 0; i < n_x; i++) {
 		if (_P(i, i) > P_MAX) {

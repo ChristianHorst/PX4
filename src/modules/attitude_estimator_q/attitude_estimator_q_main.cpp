@@ -255,8 +255,10 @@ void AttitudeEstimatorQ::task_main()
 #endif
 
 	_sensors_sub = orb_subscribe(ORB_ID(sensor_combined));
-	_vision_sub = orb_subscribe(ORB_ID(vehicle_vision_attitude));
-	_mocap_sub = orb_subscribe(ORB_ID(att_pos_mocap));
+    _vision_sub = orb_subscribe(ORB_ID(vehicle_vision_attitude));
+    _mocap_sub = orb_subscribe(ORB_ID(att_pos_mocap));
+    //_vision_sub = orb_subscribe(ORB_ID(att_pos_mocap));
+    //_mocap_sub = orb_subscribe(ORB_ID(vehicle_vision_attitude));
 	_params_sub = orb_subscribe(ORB_ID(parameter_update));
 	_global_pos_sub = orb_subscribe(ORB_ID(vehicle_global_position));
 

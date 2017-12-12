@@ -8,7 +8,6 @@ extern orb_advert_t mavlink_log_pub;
 // to initialize
 static const uint32_t 		REQ_MOCAP_INIT_COUNT = 20;
 static const uint32_t 		MOCAP_TIMEOUT =     200000;	// 0.2 s
-
 void BlockLocalPositionEstimator::mocapInit()
 {
 	// measure
@@ -47,6 +46,8 @@ int BlockLocalPositionEstimator::mocapMeasure(Vector<float, n_y_mocap> &y)
 	y(Y_mocap_z) = _sub_mocap.get().z;
 	_mocapStats.update(y);
 	_time_last_mocap = _sub_mocap.get().timestamp;
+
+
 	return OK;
 }
 
@@ -96,6 +97,14 @@ void BlockLocalPositionEstimator::mocapCorrect()
 	Vector<float, n_x> dx = K * r;
 	_x += dx;
 	_P -= K * C * _P;
+/*
+      PX4_INFO("Mocap Prediction :\t%.4f\t%.4f\t%.4f",
+           (double)_x(X_x),
+           (double)_x(X_y),
+           (double)_x(X_z) );
+*/
+
+
 }
 
 void BlockLocalPositionEstimator::mocapCheckTimeout()

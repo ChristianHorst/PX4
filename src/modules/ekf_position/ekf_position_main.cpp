@@ -110,6 +110,9 @@
 #include <uORB/topics/adc_report.h> // includes ADC readings
 #include <uORB/topics/vehicle_local_position.h>
 #include <uORB/topics/att_pos_mocap.h>
+#include <uORB/topics/vehicle_attitude.h>
+
+
 
 
 
@@ -128,6 +131,8 @@ public:
     ~Read_EKF_Data();
 
     double n=1; //counter
+    double k=1; //counter
+    double l=1; //counter
     /**
      * Start the underwater attitude control task.
      *
@@ -136,17 +141,20 @@ public:
     int		start();
 
 private:
-
-    bool	_task_should_exit;		/**< if true, task_main() should exit */
+     bool	_task_should_exit;		/**< if true, task_main() should exit */
     int		_control_task;			/**< task handle */
 
     float   water_depth;
     float      _roh_g;
     float      _p_zero;
-    int subscribed_ekf_vector_int;
+    int         subscribed_ekf_vector_int;
     int        _pressure_raw;
+    int        _vehicle_local_position;
+    int        _vehicle_attitude;
     int        counter;
-    int  att_pos_mocap_int;
+    int         att_pos_mocap_int;
+    int         pi;
+    int         alpha;
 
     orb_advert_t	att_pos_mocap_pub;		/**< attitude_pos_mocap publication */
 
@@ -183,8 +191,10 @@ Read_EKF_Data::Read_EKF_Data() :
     _control_task(-1),
     subscribed_ekf_vector_int(-1)
 {
+
     _roh_g = 98.1;
     counter = 1;
+    alpha = 20;
 }
 
 Read_EKF_Data::~Read_EKF_Data()
@@ -234,6 +244,9 @@ void Read_EKF_Data::ekf_update_poll()
                 water_depth = ( press.pressure_mbar - _p_zero ) / ( _roh_g ); //unit meter
 
 }
+
+
+
     /* Check if parameters have changed */
     orb_check(subscribed_ekf_vector_int, &updated);
 
@@ -244,7 +257,7 @@ void Read_EKF_Data::ekf_update_poll()
 
 
         /* Print the updatet absolut position and ekf covariance*/
-        /*
+       /*
         PX4_INFO("EKF_Position:\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f",
                                        (double)subscribed_ekf_vector.EKF_pos_x,
                                        (double)subscribed_ekf_vector.EKF_pos_y,
@@ -252,39 +265,82 @@ void Read_EKF_Data::ekf_update_poll()
                                        (double)subscribed_ekf_vector.EKF_covar_01,
                                        (double)subscribed_ekf_vector.EKF_covar_10,
                                        (double)subscribed_ekf_vector.EKF_covar_11);
-        */
-        _mocap_vec.x = subscribed_ekf_vector.EKF_pos_x;
-        _mocap_vec.y = subscribed_ekf_vector.EKF_pos_y;
+       */
+
+        /*Without rotation*/
+        //_mocap_vec.x = subscribed_ekf_vector.EKF_pos_x/1000;
+        //_mocap_vec.y = subscribed_ekf_vector.EKF_pos_y/1000;
+
+        /*With rotation to NED coordinates*/
+        _mocap_vec.x = subscribed_ekf_vector.EKF_pos_x/1000*cosf(alpha*M_PI/180)-subscribed_ekf_vector.EKF_pos_y/1000*sinf(alpha*M_PI/180);
+        _mocap_vec.y = subscribed_ekf_vector.EKF_pos_x/1000*sinf(alpha*M_PI/180)+subscribed_ekf_vector.EKF_pos_y/1000*cosf(alpha*M_PI/180);
 
 
          }
-
-
-
-    /* Check if parameters have changed */
-  /*  orb_check(att_pos_mocap_int, &updated);
-
-    if (updated) {
-
-        */
-        /* read from param to clear updated flag (uORB API requirement) */
-
-        orb_copy(ORB_ID(ekf_vector), att_pos_mocap_int, &_mocap_vec);
-
+ //   _mocap_vec.x = 1;
+ //   _mocap_vec.y = 0.8;
+/*
+        orb_copy(ORB_ID(att_pos_mocap), att_pos_mocap_int, &_mocap_vec);
+*/
         /* give the mocap topic the new values*/
 
+       // _mocap_vec.z = 0.5;
         _mocap_vec.z = water_depth;
 
-        /* Print the updatet absolut position and ekf covariance*/
-        PX4_INFO("Mocap_Position:\t%.4f\t%.4f\t%.4f",
+        /* Print the mocap position*/
+        n=n+1;
+        if (n > 100) {
+                    PX4_INFO("Mocap_Position:\t%.4f\t%.4f\t%.4f",
                                        (double)_mocap_vec.x,
                                        (double)_mocap_vec.y,
                                        (double)_mocap_vec.z);
+                                        n=1;
+                    }
 
+        /*Print vehicle_local_position*/
+        orb_check(_vehicle_local_position, &updated);
+        if (updated) {
+                    struct vehicle_local_position_s v_pos;
 
+                    /* get pressure value from sensor*/
+                    orb_copy(ORB_ID(vehicle_local_position), _vehicle_local_position, &v_pos);
 
+                    k=k+1;
+                    if (k > 100) {
+                                PX4_INFO("local_position:\t%.4f\t%.4f\t%.4f",
+                                                   (double)v_pos.x,
+                                                   (double)v_pos.y,
+                                                   (double)v_pos.z);
+                                                    k=1;
+                                }
 
-//}
+                       }
+        /*Print vehicle_local_position*/
+        orb_check(_vehicle_attitude, &updated);
+        if (updated) {
+                    struct vehicle_attitude_s v_att;
+
+                    /* get pressure value from sensor*/
+                    orb_copy(ORB_ID(vehicle_attitude), _vehicle_attitude, &v_att);
+
+                   l=l+1;
+                    if (l > 100) {
+                                PX4_INFO("local_position:\t%.4f\t%.4f\t%.4f\t%.4f",
+                                                   (double)v_att.q[0],
+                                                   (double)v_att.q[1],
+                                                   (double)v_att.q[2],
+                                                   (double)v_att.q[3]);
+                                                    l=1;
+                                }
+            }
+
+        struct vehicle_local_position_s v_pos_print;
+        orb_copy(ORB_ID(vehicle_local_position), _vehicle_local_position, &v_pos_print);
+        FILE *sd;
+            sd = fopen("/fs/microsd/MAVLink.csv","a");
+            fprintf(sd,"Localization Pos and EKF Local Position:;\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n",(double)_mocap_vec.x,(double)_mocap_vec.y,(double)_mocap_vec.z,(double)v_pos_print.x,(double)v_pos_print.y,(double)v_pos_print.z);
+            fclose(sd);
+
 
 }
 
@@ -294,8 +350,9 @@ void Read_EKF_Data::ekf_update_poll()
 
 void Read_EKF_Data::task_main()
 {
-
+ _vehicle_local_position = orb_subscribe(ORB_ID(vehicle_local_position));
  _pressure_raw = orb_subscribe(ORB_ID(pressure));
+ _vehicle_attitude = orb_subscribe(ORB_ID(vehicle_attitude));
 subscribed_ekf_vector_int = orb_subscribe(ORB_ID(ekf_vector));
 att_pos_mocap_int = orb_subscribe(ORB_ID(att_pos_mocap));
 
@@ -306,9 +363,10 @@ att_pos_mocap_int = orb_subscribe(ORB_ID(att_pos_mocap));
            usleep(20000);
            ekf_update_poll();
 
+           att_pos_mocap_pub = orb_advertise(ORB_ID(att_pos_mocap), &_mocap_vec);
+           orb_publish(ORB_ID(att_pos_mocap), att_pos_mocap_pub, &_mocap_vec);
+
      }
-      att_pos_mocap_pub = orb_advertise(ORB_ID(att_pos_mocap), &_mocap_vec);
-      orb_publish(ORB_ID(att_pos_mocap), att_pos_mocap_pub, &_mocap_vec);
 
 }
 

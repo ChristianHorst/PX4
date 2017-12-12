@@ -100,7 +100,7 @@ class BlockLocalPositionEstimator : public control::SuperBlock
 // 	land (detects when landed)): pz (always measures agl = 0)
 //
 public:
-
+       double n=1; //counter
 	// constants
 	enum {X_x = 0, X_y, X_z, X_vx, X_vy, X_vz, X_bx, X_by, X_bz, X_tz, n_x};
 	enum {U_ax = 0, U_ay, U_az, n_u};
@@ -146,6 +146,7 @@ public:
 	void update();
 	virtual ~BlockLocalPositionEstimator();
 
+
 private:
 	// prevent copy and assignment
 	BlockLocalPositionEstimator(const BlockLocalPositionEstimator &);
@@ -162,6 +163,8 @@ private:
 	void initSS();
 	void updateSSStates();
 	void updateSSParams();
+
+
 
 	// predict the next state
 	void predict();

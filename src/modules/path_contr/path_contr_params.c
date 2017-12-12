@@ -33,7 +33,7 @@
 #include <systemlib/param/param.h>
 
 /**
- * @file path_controller_params.c
+ * @file path_contr_params.c
  * Parameters for path controller for the Hippocampus.
  *
  * @author Nils Rottmann <Nils.Rottmann@tuhh.de>
@@ -46,9 +46,9 @@
  * Factor for the position error.
  *
  */
-PARAM_DEFINE_FLOAT(PathC_K_PX, 1.0f);
-PARAM_DEFINE_FLOAT(PathC_K_PY, 1.0f);
-PARAM_DEFINE_FLOAT(PathC_K_PZ, 1.0f);
+PARAM_DEFINE_FLOAT(PC_K_PX, 1.0f);
+PARAM_DEFINE_FLOAT(PC_K_PY, 1.0f);
+PARAM_DEFINE_FLOAT(PC_K_PZ, 1.0f);
 
 /**
  * K_V derivative position gain
@@ -56,9 +56,9 @@ PARAM_DEFINE_FLOAT(PathC_K_PZ, 1.0f);
  * Factor for the position error.
  *
  */
-PARAM_DEFINE_FLOAT(PathC_K_VX, 1.0f);
-PARAM_DEFINE_FLOAT(PathC_K_VY, 1.0f);
-PARAM_DEFINE_FLOAT(PathC_K_VZ, 1.0f);
+PARAM_DEFINE_FLOAT(PC_K_VX, 1.0f);
+PARAM_DEFINE_FLOAT(PC_K_VY, 1.0f);
+PARAM_DEFINE_FLOAT(PC_K_VZ, 1.0f);
 
 /**
  * K_P proportional angel gain
@@ -66,9 +66,9 @@ PARAM_DEFINE_FLOAT(PathC_K_VZ, 1.0f);
  * Factor for the angular error.
  *
  */
-PARAM_DEFINE_FLOAT(PathC_K_RX, 1.0f);
-PARAM_DEFINE_FLOAT(PathC_K_RY, 1.0f);
-PARAM_DEFINE_FLOAT(PathC_K_RZ, 1.0f);
+PARAM_DEFINE_FLOAT(PC_K_RX, 1.0f);
+PARAM_DEFINE_FLOAT(PC_K_RY, 1.0f);
+PARAM_DEFINE_FLOAT(PC_K_RZ, 1.0f);
 
 /**
  * K_W derivative angel gain
@@ -76,39 +76,39 @@ PARAM_DEFINE_FLOAT(PathC_K_RZ, 1.0f);
  * Factor for the angel velocity error.
  *
  */
-PARAM_DEFINE_FLOAT(PathC_K_WX, 1.0f);
-PARAM_DEFINE_FLOAT(PathC_K_WY, 1.0f);
-PARAM_DEFINE_FLOAT(PathC_K_WZ, 1.0f);
+PARAM_DEFINE_FLOAT(PC_K_WX, 1.0f);
+PARAM_DEFINE_FLOAT(PC_K_WY, 1.0f);
+PARAM_DEFINE_FLOAT(PC_K_WZ, 1.0f);
 
 /**
  * Mass of the Hippocampus
  *
  */
-PARAM_DEFINE_FLOAT(PathC_m, 1.47f);
+PARAM_DEFINE_FLOAT(PC_m, 1.47f);
 
 /**
  * Added mass X-direction
  *
  */
-PARAM_DEFINE_FLOAT(PathC_X_du, 1.11f);
+PARAM_DEFINE_FLOAT(PC_X_du, 1.11f);
 
 /**
  * Added mass Y-direction
  *
  */
-PARAM_DEFINE_FLOAT(PathC_Y_du, 2.8f);
+PARAM_DEFINE_FLOAT(PC_Y_du, 2.8f);
 
 /**
  * Added mass Z-direction
  *
  */
-PARAM_DEFINE_FLOAT(PathC_Z_dw, 2.8f);
+PARAM_DEFINE_FLOAT(PC_Z_dw, 2.8f);
 
 /**
  * Damping X-direction
  *
  */
-PARAM_DEFINE_FLOAT(PathC_X_u, 5.39f);
+PARAM_DEFINE_FLOAT(PC_X_u, 5.39f);
 
 /**
  * Damping Y-direction
@@ -120,56 +120,47 @@ PARAM_DEFINE_FLOAT(PC_Y_v, 17.36f);
  * Damping Z-direction
  *
  */
-PARAM_DEFINE_FLOAT(PathC_Z_w, 17.36f);
+PARAM_DEFINE_FLOAT(PC_Z_w, 17.36f);
 
 /**
  * Force scaling constant, should be the same as given in the simulation
  *
  */
-PARAM_DEFINE_FLOAT(PathC_K_F, 3.0f);
+PARAM_DEFINE_FLOAT(PC_K_F, 3.0f);
 
 /**
  * Moment scaling constant, should be the same as given in the simulation
  *
  */
-PARAM_DEFINE_FLOAT(PathC_K_M, 0.02f);
+PARAM_DEFINE_FLOAT(PC_K_M, 0.02f);
 
 /**
  * lifting arm for the Forces to generate Moments in pitch and yaw direction
  *
  */
-PARAM_DEFINE_FLOAT(PathC_L, 0.0481f);
+PARAM_DEFINE_FLOAT(PC_L, 0.0481f);
 
 /**
  * Operating Grade
  *
  */
-PARAM_DEFINE_FLOAT(PathC_OG, 1.0f);
+PARAM_DEFINE_FLOAT(PC_OG, 1.0f);
 
 /**
  * Desired Angle Roll
  *
  */
-PARAM_DEFINE_FLOAT(PathC_ROLL, 0.0f);
+PARAM_DEFINE_FLOAT(PC_ROLL, 0.0f);
 
 /**
  * Desired Angle Pitch
  *
  */
-PARAM_DEFINE_FLOAT(PathC_PITCH, 1.5f);
+PARAM_DEFINE_FLOAT(PC_PITCH, 1.5f);
 
 /**
  * Desired Angle Yaw
  *
  */
-PARAM_DEFINE_FLOAT(PathC_YAW, 0.0f);
+PARAM_DEFINE_FLOAT(PC_YAW, 0.0f);
 
-
-/**
- * Thrust and Yaw rates for optional Circle_Control
- * PathC_CIRCLE_CONTROL = 1 for Circle_Control
- *
- */
-//PARAM_DEFINE_FLOAT(PathC_CIRCLE_YAW, 0.0f);
-//PARAM_DEFINE_FLOAT(PathC_CIRCLE_THRSUT, 0.0f);
-//PARAM_DEFINE_FLOAT(PathC_CIRCLE_CONTROL, 0.0f);

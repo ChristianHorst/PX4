@@ -88,6 +88,9 @@ set(config_module_list
         #modules/water_depth_control_2
         modules/raw_pressure
         modules/path_controller
+       modules/trajectory_planner
+        #modules/path_contr
+        modules/circle_contr
 
 
 	#
@@ -120,21 +123,21 @@ set(config_module_list
 	# Estimation modules
 	#
 	modules/attitude_estimator_q
-	modules/ekf2
+	#modules/ekf2
 	modules/local_position_estimator
 	modules/position_estimator_inav
 
 	#
 	# Vehicle Control
 	#
-	modules/fw_att_control
-	modules/fw_pos_control_l1
-	modules/gnd_att_control
-	modules/gnd_pos_control
-	modules/mc_att_control
-	modules/mc_pos_control
+        #modules/fw_att_control
+        #modules/fw_pos_control_l1
+        #modules/gnd_att_control
+        #modules/gnd_pos_control
+        #modules/mc_att_control
+        #modules/mc_pos_control
 	modules/vtol_att_control
-	modules/uuv_att_control
+        modules/uuv_att_control
 
 	#
 	# Logging

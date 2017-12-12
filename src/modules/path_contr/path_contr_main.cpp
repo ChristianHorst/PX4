@@ -32,7 +32,7 @@
  ****************************************************************************/
 
 /**
- * @file path_controller_main.cpp
+ * @file path_contr_main.cpp
  * Hippocampus path controller.
  *
  * Publication for the desired attitude tracking:
@@ -85,7 +85,7 @@
 
 
 // Hippocampus path controller
-extern "C" __EXPORT int path_controller_main(int argc, char *argv[]);
+extern "C" __EXPORT int path_contr_main(int argc, char *argv[]);
 
 // the class from which an instance will be initiated by starting this application
 class HippocampusPathControl
@@ -169,9 +169,6 @@ private:
 		param_t ROLL;
 		param_t PITCH;
 		param_t YAW;
-     //   param_t CIRCLE_YAW;
-     //  param_t CIRCLE_THRUST;
-     //  param_t CIRCLE_CONTROL;
 	}		_params_handles;		// handles for to find parameters
 
 	struct {
@@ -193,10 +190,7 @@ private:
 		float roll;
 		float pitch;
 		float yaw;
-      //  float circle_yaw;
-       //float circle_thrust;
-       //int circle_control;
-    }		_params;
+	}		_params;
 
 	// actualizes position data
 	void        actualize_position();
@@ -231,7 +225,7 @@ private:
 };
 
 
-namespace path_controller
+namespace path_contr
 {
 HippocampusPathControl	*g_control;
 }
@@ -256,7 +250,7 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
 
 
 	// performance counters
-	_loop_perf(perf_alloc(PC_ELAPSED, "path_controller")),
+        _loop_perf(perf_alloc(PC_ELAPSED, "path_contr")),
 	_controller_latency_perf(perf_alloc_once(PC_ELAPSED, "ctrl_latency"))
 
 // here starts the allocation of values to the variables
@@ -281,9 +275,6 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
 	_params.roll = 0.0f;
 	_params.pitch = 0.0f;
 	_params.yaw = 0.0f;
-   // _params.circle_yaw = 0.0f;
-   //_params.circle_thrust  = 0.0f;
-   //_params.circle_control = 0.0f;
 
 	// set initial values of vectors to zero
 	_position_0.zero();
@@ -308,35 +299,32 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
 	_I.identity();
 
 	// allocate parameter handles
-    _params_handles.K_PX	        = 	param_find("PathC_K_PX");
-    _params_handles.K_PY	        = 	param_find("PathC_K_PY");
-    _params_handles.K_PZ	        = 	param_find("PathC_K_PZ");
-    _params_handles.K_VX		    = 	param_find("PathC_K_VX");
-    _params_handles.K_VY		    = 	param_find("PathC_K_VY");
-    _params_handles.K_VZ		    = 	param_find("PathC_K_VZ");
-    _params_handles.K_RX		    = 	param_find("PathC_K_RX");
-    _params_handles.K_RY		    = 	param_find("PathC_K_RY");
-    _params_handles.K_RZ		    = 	param_find("PathC_K_RZ");
-    _params_handles.K_WX		    = 	param_find("PathC_K_WX");
-    _params_handles.K_WY		    = 	param_find("PathC_K_WY");
-    _params_handles.K_WZ		    = 	param_find("PathC_K_WZ");
-    _params_handles.m		        = 	param_find("PathC_m");
-    _params_handles.X_du		    = 	param_find("PathC_X_du");
-    _params_handles.Y_dv		    = 	param_find("PathC_Y_dv");
-    _params_handles.Z_dw		    = 	param_find("PathC_Z_dw");
-    _params_handles.X_u		        = 	param_find("PathC_X_u");
-    _params_handles.Y_v		        = 	param_find("PathC_Y_v");
-    _params_handles.Z_w		        = 	param_find("PathC_Z_w");
-    _params_handles.K_F		        = 	param_find("PathC_K_F");
-    _params_handles.K_M		        = 	param_find("PathC_K_M");
-    _params_handles.L	            = 	param_find("PathC_L");
-    _params_handles.OG	            = 	param_find("PathC_OG");
-    _params_handles.ROLL	        = 	param_find("PathC_ROLL");
-    _params_handles.PITCH	        = 	param_find("PathC_PITCH");
-    _params_handles.YAW	            = 	param_find("PathC_YAW");
-   // _params_handles.CIRCLE_YAW	    = 	param_find("PathC_CIRCLE_YAW");
-  //  _params_handles.CIRCLE_THRUST	= 	param_find("PathC_CIRCLE_THRUST");
-  //  _params_handles.CIRCLE_CONTROL  = 	param_find("PathC_CIRCLE_CONTROL");
+	_params_handles.K_PX	        = 	param_find("PC_K_PX");
+	_params_handles.K_PY	        = 	param_find("PC_K_PY");
+	_params_handles.K_PZ	        = 	param_find("PC_K_PZ");
+	_params_handles.K_VX		    = 	param_find("PC_K_VX");
+	_params_handles.K_VY		    = 	param_find("PC_K_VY");
+	_params_handles.K_VZ		    = 	param_find("PC_K_VZ");
+	_params_handles.K_RX		    = 	param_find("PC_K_RX");
+	_params_handles.K_RY		    = 	param_find("PC_K_RY");
+	_params_handles.K_RZ		    = 	param_find("PC_K_RZ");
+	_params_handles.K_WX		    = 	param_find("PC_K_WX");
+	_params_handles.K_WY		    = 	param_find("PC_K_WY");
+	_params_handles.K_WZ		    = 	param_find("PC_K_WZ");
+	_params_handles.m		        = 	param_find("PC_m");
+    _params_handles.X_du		    = 	param_find("PC_X_du");
+	_params_handles.Y_dv		    = 	param_find("PC_Y_dv");
+	_params_handles.Z_dw		    = 	param_find("PC_Z_dw");
+	_params_handles.X_u		        = 	param_find("PC_X_u");
+	_params_handles.Y_v		        = 	param_find("PC_Y_v");
+	_params_handles.Z_w		        = 	param_find("PC_Z_w");
+	_params_handles.K_F		        = 	param_find("PC_K_F");
+	_params_handles.K_M		        = 	param_find("PC_K_M");
+	_params_handles.L	            = 	param_find("PC_L");
+	_params_handles.OG	            = 	param_find("PC_OG");
+	_params_handles.ROLL	        = 	param_find("PC_ROLL");
+	_params_handles.PITCH	        = 	param_find("PC_PITCH");
+	_params_handles.YAW	            = 	param_find("PC_YAW");
 
 	// fetch initial parameter values
 	parameters_update();
@@ -364,7 +352,7 @@ HippocampusPathControl::~HippocampusPathControl()
 		} while (_control_task != -1);
 	}
 
-	path_controller::g_control = nullptr;
+        path_contr::g_control = nullptr;
 }
 
 // updates parameters
@@ -424,12 +412,6 @@ int HippocampusPathControl::parameters_update()
 	_params.pitch = v;
 	param_get(_params_handles.YAW, &v);
 	_params.yaw = v;
-   // param_get(_params_handles.CIRCLE_YAW, &v);
-   // _params.circle_yaw = v;
-   // param_get(_params_handles.CIRCLE_THRUST, &v);
-   // _params.circle_thrust = v;
-   // param_get(_params_handles.CIRCLE_CONTROL, &v);
-   // _params.circle_control = v;
 
 	return OK;
 }
@@ -782,23 +764,14 @@ void HippocampusPathControl::path_control(float dt)
 	// Reduce Input signal by a certain percentage
 	mix_input = mix_input * _params.OG;
 
-  /*  if (_params.circle_control == 1){
-        // give the inputs to the actuators
-        _actuators.control[0] = 0;           // roll
-        _actuators.control[1] = 0;           // pitch
-        _actuators.control[2] = _params.circle_yaw;           // yaw
-        _actuators.control[3] = _params.circle_thrust;           // thrust
-    }
-    else{*/
     if (_v_traj_sp.start == 1) {
 	// give the inputs to the actuators
 	_actuators.control[0] = mix_input(0);           // roll
 	_actuators.control[1] = mix_input(1);           // pitch
 	_actuators.control[2] = mix_input(2);           // yaw
 	_actuators.control[3] = mix_input(3);           // thrust
-    }
+	}
 
-  //  }
 	// store logging data for publishing
 	_logging_hippocampus.x = r(0);
 	_logging_hippocampus.y = r(1);
@@ -873,7 +846,7 @@ void HippocampusPathControl::path_control(float dt)
 // Just starts the task_main function
 void HippocampusPathControl::task_main_trampoline(int argc, char *argv[])
 {
-	path_controller::g_control->task_main();
+        path_contr::g_control->task_main();
 }
 
 // this is the main_task function which does the control task
@@ -909,7 +882,7 @@ void HippocampusPathControl::task_main()
 
 		// this is undesirable but not much we can do - might want to flag unhappy status
 		if (pret < 0) {
-			warn("path_controller: poll error %d, %d", pret, errno);
+                        warn("path_contr: poll error %d, %d", pret, errno);
 			// sleep a bit before next try
 			usleep(100000);
 			continue;
@@ -937,7 +910,6 @@ void HippocampusPathControl::task_main()
 
 			// do path control
 			path_control(dt);
-            usleep(20000);
 
 			// publish logging data
 			if (_logging_hippocampus_pub != nullptr) {
@@ -978,7 +950,7 @@ int HippocampusPathControl::start()
 	ASSERT(_control_task == -1);        // give a value -1
 
 	// start the control task, performs any specific accounting, scheduler setup, etc.
-	_control_task = px4_task_spawn_cmd("path_controller",
+        _control_task = px4_task_spawn_cmd("path_contr",
 					   SCHED_DEFAULT,
 					   SCHED_PRIORITY_MAX - 5,
 					   1500,
@@ -994,34 +966,34 @@ int HippocampusPathControl::start()
 }
 
 // main function
-int path_controller_main(int argc, char *argv[])
+int path_contr_main(int argc, char *argv[])
 {
 	if (argc < 2) {
-		warnx("usage: path_controller {full|attitude|stop|status}");
+                warnx("usage: path_contr {full|attitude|stop|status}");
 		return 1;
 	}
 
 	// if command is start, then first control if class exists already, if not, allocate new one
 	if (!strcmp(argv[1], "full") || !strcmp(argv[1], "attitude")) {
 
-		if (path_controller::g_control != nullptr) {
+                if (path_contr::g_control != nullptr) {
 			warnx("already running");
 			return 1;
 		}
 
 		// allocate new class HippocampusPathControl
-		path_controller::g_control = new HippocampusPathControl(argv[1]);
+                path_contr::g_control = new HippocampusPathControl(argv[1]);
 
 		// check if class has been allocated, if not, give back failure
-		if (path_controller::g_control == nullptr) {
+                if (path_contr::g_control == nullptr) {
 			warnx("alloc failed");
 			return 1;
 		}
 
 		// if function start() can not be called, delete instance of HippocampusPathControl and allocate null pointer
-		if (OK != path_controller::g_control->start()) {
-			delete path_controller::g_control;
-			path_controller::g_control = nullptr;
+                if (OK != path_contr::g_control->start()) {
+                        delete path_contr::g_control;
+                        path_contr::g_control = nullptr;
 			warnx("start failed");
 			return 1;
 		}
@@ -1031,20 +1003,20 @@ int path_controller_main(int argc, char *argv[])
 
 	// if command is start, check if class exists, if not can not stop anything
 	if (!strcmp(argv[1], "stop")) {
-		if (path_controller::g_control == nullptr) {
+                if (path_contr::g_control == nullptr) {
 			warnx("not running");
 			return 1;
 		}
 
 		// if class exists, delete it and allocate null pointer
-		delete path_controller::g_control;
-		path_controller::g_control = nullptr;
+                delete path_contr::g_control;
+                path_contr::g_control = nullptr;
 		return 0;
 	}
 
 	// if command is status and class exists, give back running, else give back not running
 	if (!strcmp(argv[1], "status")) {
-		if (path_controller::g_control) {
+                if (path_contr::g_control) {
 			warnx("running");
 			return 0;
 
