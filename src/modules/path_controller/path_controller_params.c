@@ -156,7 +156,7 @@ PARAM_DEFINE_FLOAT(PathC_ROLL, 0.0f);
  * Desired Angle Pitch
  *
  */
-PARAM_DEFINE_FLOAT(PathC_PITCH, 1.5f);
+PARAM_DEFINE_FLOAT(PathC_PITCH, 1.5f); //1.5
 
 /**
  * Desired Angle Yaw
@@ -165,11 +165,3 @@ PARAM_DEFINE_FLOAT(PathC_PITCH, 1.5f);
 PARAM_DEFINE_FLOAT(PathC_YAW, 0.0f);
 
 
-/**
- * Thrust and Yaw rates for optional Circle_Control
- * PathC_CIRCLE_CONTROL = 1 for Circle_Control
- *
- */
-//PARAM_DEFINE_FLOAT(PathC_CIRCLE_YAW, 0.0f);
-//PARAM_DEFINE_FLOAT(PathC_CIRCLE_THRSUT, 0.0f);
-//PARAM_DEFINE_FLOAT(PathC_CIRCLE_CONTROL, 0.0f);

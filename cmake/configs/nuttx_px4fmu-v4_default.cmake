@@ -88,7 +88,7 @@ set(config_module_list
         #modules/water_depth_control_2
         modules/raw_pressure
         modules/path_controller
-       modules/trajectory_planner
+        modules/trajectory_planner
         #modules/path_contr
         modules/circle_contr
 

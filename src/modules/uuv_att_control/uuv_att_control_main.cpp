@@ -439,7 +439,7 @@ void UUVAttControl::att_control(float dt)
 	// give the inputs to the actuators
 	_actuators.control[0] = u_24(0);            // roll
 	_actuators.control[1] = u_24(1);            // pitch
-	_actuators.control[2] = u_24(2);;           // yaw
+    _actuators.control[2] = u_24(2);           // yaw
 	_actuators.control[3] = u_1;                // thrust
 }
 

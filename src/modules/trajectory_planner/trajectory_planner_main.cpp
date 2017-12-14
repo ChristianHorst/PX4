@@ -77,7 +77,7 @@
 #include <lib/tailsitter_recovery/tailsitter_recovery.h>
 
 
-#include <memory.h>
+//#include <memory.h>
 
 
 // Hippocampus trajectory_planner
@@ -117,7 +117,7 @@ private:
 	// STOMP, declare random generator
 	std::default_random_engine generator;
   	std::normal_distribution<float> distribution;
-    constexpr static int rand_n = 50;
+    constexpr static int rand_n = 10;
   	int rand_counter;
   	math::Matrix<rand_n,2> rand_u;
   	math::Matrix<rand_n,rand_n> Sigma;
@@ -341,6 +341,10 @@ void HippocampusTrajectoryPlanner::point()
 
 	// publish setpoint data
 	orb_publish(ORB_ID(trajectory_setpoint), _v_traj_sp_pub, &_v_traj_sp);
+    /*PX4_INFO("e_p:\t%8.2f\t%8.2f\t%8.2f",
+         (double)_v_traj_sp.x,
+         (double)_v_traj_sp.y,
+         (double)_v_traj_sp.z);*/
 }
 
 // This function gives back a circle

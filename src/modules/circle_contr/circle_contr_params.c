@@ -36,7 +36,7 @@
  * @file circle_contr_params.c
  * Parameters for path controller for the Hippocampus.
  *
- * @author Nils Rottmann <Nils.Rottmann@tuhh.de>
+ * @author Viktor Rausch
  */
 
 

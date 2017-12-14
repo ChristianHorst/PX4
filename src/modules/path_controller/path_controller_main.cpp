@@ -169,9 +169,6 @@ private:
 		param_t ROLL;
 		param_t PITCH;
 		param_t YAW;
-     //   param_t CIRCLE_YAW;
-     //  param_t CIRCLE_THRUST;
-     //  param_t CIRCLE_CONTROL;
 	}		_params_handles;		// handles for to find parameters
 
 	struct {
@@ -193,9 +190,6 @@ private:
 		float roll;
 		float pitch;
 		float yaw;
-      //  float circle_yaw;
-       //float circle_thrust;
-       //int circle_control;
     }		_params;
 
 	// actualizes position data
@@ -281,9 +275,6 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
 	_params.roll = 0.0f;
 	_params.pitch = 0.0f;
 	_params.yaw = 0.0f;
-   // _params.circle_yaw = 0.0f;
-   //_params.circle_thrust  = 0.0f;
-   //_params.circle_control = 0.0f;
 
 	// set initial values of vectors to zero
 	_position_0.zero();
@@ -334,10 +325,6 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
     _params_handles.ROLL	        = 	param_find("PathC_ROLL");
     _params_handles.PITCH	        = 	param_find("PathC_PITCH");
     _params_handles.YAW	            = 	param_find("PathC_YAW");
-   // _params_handles.CIRCLE_YAW	    = 	param_find("PathC_CIRCLE_YAW");
-  //  _params_handles.CIRCLE_THRUST	= 	param_find("PathC_CIRCLE_THRUST");
-  //  _params_handles.CIRCLE_CONTROL  = 	param_find("PathC_CIRCLE_CONTROL");
-
 	// fetch initial parameter values
 	parameters_update();
 }
@@ -576,7 +563,7 @@ math::Vector<3> HippocampusPathControl::flowField(math::Vector<3> pos)
 void HippocampusPathControl::path_control(float dt)
 {
 	// actualize setpoint data
-	trajectory_setpoint_poll();
+    trajectory_setpoint_poll();
 
 	// count time
 	t_ges = t_ges + dt;
@@ -607,7 +594,7 @@ void HippocampusPathControl::path_control(float dt)
 
 	// desired force and outputs
 	math::Vector<3> F_des;
-	float u_1 = 0.0f;
+ //   float u_1 = 0.0f;
 	math::Vector<3> u_24;
 
 	// rotation matrices and angular velocity vectors
@@ -641,15 +628,15 @@ void HippocampusPathControl::path_control(float dt)
 	math::Vector<3> y_B_des;                                                    // orientation body y-axis desired
 	math::Vector<3> z_B_des;                                                    // orientation body z-axis desired
 
-	// Get Flow Velocity
-	math::Vector<3> flowVel = flowField(r);
+    // Get Flow Velocity
+ //   math::Vector<3> flowVel = flowField(r);
 
 	// Transform Matrices into World coordinates
-	math::Matrix<3,3> M_A_W = R * _params.M_A * R.transposed();
-	math::Matrix<3,3> D_W = R * _params.D * R.transposed();
+//    math::Matrix<3,3> M_A_W = R * _params.M_A * R.transposed();
+//    math::Matrix<3,3> D_W = R * _params.D * R.transposed();
 
 	if (!strcmp(type_array, "full")) {
-	    math::Vector<3> z_C_des(0, -sinf(_v_traj_sp.roll), cosf(_v_traj_sp.roll));    // orientation C-Coordinate system desired
+    /*   math::Vector<3> z_C_des(0, -sinf(_v_traj_sp.roll), cosf(_v_traj_sp.roll));    // orientation C-Coordinate system desired
 	    math::Vector<3> y_C_des(0, cosf(_v_traj_sp.roll), sinf(_v_traj_sp.roll));     // orientation C-Coordinate system desired
 
 	    // projection on x_B
@@ -664,7 +651,7 @@ void HippocampusPathControl::path_control(float dt)
         math::Vector<3> rd_e = rd_T - flowVel;
 	    F_des = - _params.K_p * e_p - _params.K_v * e_v + rdd_T * _params.m + M_A_W * rdd_T + D_W * rd_e;
 
-	    u_1 = F_des * x_B;                                 // calculate desired thrust
+        u_1 = F_des * x_B;                                 // calculate desired thrust
 
 	    // calculate orientation vectors
 	    x_B_des = F_des / F_des.length();
@@ -683,13 +670,13 @@ void HippocampusPathControl::path_control(float dt)
 	    R_des_1.set_col(0, x_B_des);
 	    R_des_1.set_col(1, y_B_des_1);
 	    R_des_1.set_col(2, z_B_des_1);
-	    math::Vector<3> e_r_1 = rotError(R, R_des_1);
+        math::Vector<3> e_r_1 = rotError(R, R_des_1);
 
 	    math::Matrix<3,3> R_des_2;
 	    R_des_2.set_col(0, x_B_des);
 	    R_des_2.set_col(1, y_B_des_2);
-	    R_des_2.set_col(2, z_B_des_2);
-	    math::Vector<3> e_r_2 = rotError(R, R_des_2);
+        R_des_2.set_col(2, z_B_des_2);
+        math::Vector<3> e_r_2 = rotError(R, R_des_2);
 
 	    // check which orientation error is smaller and use this as desired orientation
 	    if (e_r_1.length() < e_r_2.length()) {
@@ -718,9 +705,9 @@ void HippocampusPathControl::path_control(float dt)
 
 	    // calculate the angular velocity error
 	    e_w = R.transposed() * w_BW - R.transposed() * w_BW_T;
-
+    */
 	} else if (!strcmp(type_array, "attitude")) {
-	    float c_roll = cosf(_params.roll);
+        float c_roll = cosf(_params.roll);
 	    float s_roll = sinf(_params.roll);
 	    float c_pitch = cosf(_params.pitch);
 	    float s_pitch = sinf(_params.pitch);
@@ -737,16 +724,30 @@ void HippocampusPathControl::path_control(float dt)
 	    R_des(2,1) = s_roll*c_pitch;
 	    R_des(2,2) = c_roll*c_pitch;
 
-	    e_r = rotError(R, R_des);
 
-	    x_B_des = R_des.get_colValues(0);
-	    y_B_des = R_des.get_colValues(1);
-	    z_B_des = R_des.get_colValues(2);
+  /*     PX4_INFO("Actuators_control:\t%8.2f\t%8.2f\t%8.2f",
+             (double) R_des(0,0),
+             (double) R_des(1,1),
+             (double) R_des(2,2));
+*/
+ /*    PX4_INFO("Actuators_control:\t%8.2f\t%8.2f\t%8.2f",
+                  (double)_params.roll,
+                  (double)_params.pitch,
+                  (double)_params.yaw);
+*/
+//      usleep(20000);
+    //    e_r = rotError(R, R_des);
 
-	    u_1 = 0.0f;
-	    e_w = R.transposed() * w_BW;
-	}
+  //      x_B_des = R_des.get_colValues(0);
+//	    y_B_des = R_des.get_colValues(1);
+    //    z_B_des = R_des.get_colValues(2);
 
+    //    u_1 = 0.0f;
+//	    e_w = R.transposed() * w_BW;
+
+    }
+
+/*
 	// calculate input over feedback loop
 	u_24 = -_params.K_r * e_r - _params.K_w * e_w;
 
@@ -782,14 +783,10 @@ void HippocampusPathControl::path_control(float dt)
 	// Reduce Input signal by a certain percentage
 	mix_input = mix_input * _params.OG;
 
-  /*  if (_params.circle_control == 1){
-        // give the inputs to the actuators
-        _actuators.control[0] = 0;           // roll
-        _actuators.control[1] = 0;           // pitch
-        _actuators.control[2] = _params.circle_yaw;           // yaw
-        _actuators.control[3] = _params.circle_thrust;           // thrust
-    }
-    else{*/
+
+
+
+
     if (_v_traj_sp.start == 1) {
 	// give the inputs to the actuators
 	_actuators.control[0] = mix_input(0);           // roll
@@ -798,7 +795,7 @@ void HippocampusPathControl::path_control(float dt)
 	_actuators.control[3] = mix_input(3);           // thrust
     }
 
-  //  }
+
 	// store logging data for publishing
 	_logging_hippocampus.x = r(0);
 	_logging_hippocampus.y = r(1);
@@ -842,7 +839,7 @@ void HippocampusPathControl::path_control(float dt)
 
 		counter = counter + 3.0f;            // every 0.5 seconds
 
-		/*PX4_INFO("e_p:\t%8.2f\t%8.2f\t%8.2f",
+        PX4_INFO("e_p:\t%8.2f\t%8.2f\t%8.2f",
 			 (double)e_p(0),
 			 (double)e_p(1),
 			 (double)e_p(2));
@@ -857,17 +854,22 @@ void HippocampusPathControl::path_control(float dt)
 		PX4_INFO("e_w:\t%8.2f\t%8.2f\t%8.2f\n",
 			 (double)e_w(0),
 			 (double)e_w(1),
-			 (double)e_w(2));*/
-		/*PX4_INFO("r:\t%8.2f\t%8.2f\t%8.2f",
+             (double)e_w(2));
+        PX4_INFO("r:\t%8.2f\t%8.2f\t%8.2f",
 			 (double)r(0),
 			 (double)r(1),
-			 (double)r(2));*/
+             (double)r(2));
 		PX4_INFO("PP:\t%8.2f\t%8.2f\t%8.2f",
 			 (double)r(0),
 			 (double)r(1),
 			 (double)r(2));
+        PX4_INFO("Actuators_control:\t%8.2f\t%8.2f\t%8.2f\t%8.2f",
+             (double)mix_input(0),
+             (double)mix_input(1),
+             (double)mix_input(2),
+             (double)mix_input(3));
 	}
-
+*/
 }
 
 // Just starts the task_main function
@@ -936,8 +938,10 @@ void HippocampusPathControl::task_main()
             orb_copy(ORB_ID(vehicle_local_position), _v_pos_sub, &_v_pos);
 
 			// do path control
-			path_control(dt);
-            usleep(20000);
+
+            path_control(dt);
+            usleep(100000); //20000
+         //   PX4_INFO("TEST_RUN");
 
 			// publish logging data
 			if (_logging_hippocampus_pub != nullptr) {
