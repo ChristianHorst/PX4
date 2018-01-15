@@ -70,7 +70,6 @@
 #include <uORB/topics/vehicle_attitude.h>               // orientation data
 #include <uORB/topics/vehicle_local_position.h>         // position data
 #include <uORB/topics/parameter_update.h>
-#include <uORB/topics/trajectory_setpoint.h>
 // system libraries
 #include <systemlib/param/param.h>
 #include <systemlib/err.h>
@@ -117,7 +116,6 @@ private:
 	// topic structures, in this structures the data of the topics are stored
 	struct actuator_controls_s			_actuators;			    // actuator controls
 	struct vehicle_attitude_s		    _v_att;		            // attitude data
-    struct trajectory_setpoint_s	    _v_traj_sp;			    // trajectory setpoint
 
 	// performance counters
 	perf_counter_t	_loop_perf;
@@ -169,9 +167,6 @@ private:
 	// Check for parameter update and handle it.
 	void		parameter_update_poll();            // receives parameters
 
-    // update actual trajectory setpoint
-	void        trajectory_setpoint_poll();
-
 	// Shim for calling task_main from task_create.
 	static void	task_main_trampoline(int argc, char *argv[]);
 
@@ -195,7 +190,6 @@ UUVAttControl::UUVAttControl() :
 	// subscriptions
 	_v_att_sub(-1),
 	_params_sub(-1),
-	_v_traj_sp_sub(-1),
 
 	// publications
 	_actuators_0_pub(nullptr),
@@ -210,7 +204,6 @@ UUVAttControl::UUVAttControl() :
 	// define publication settings
 	memset(&_v_att, 0, sizeof(_v_att));
 	memset(&_actuators, 0, sizeof(_actuators));
-	memset(&_v_traj_sp, 0, sizeof(_v_traj_sp));
 
 	// set parameters to zero
 	_params.K_r.zero();
@@ -317,18 +310,6 @@ void UUVAttControl::parameter_update_poll()
 	}
 }
 
-// Get the Setpoint from the trajectory planner
-void UUVAttControl::trajectory_setpoint_poll()
-{
-	/* check if there is a new setpoint */
-	bool updated;
-	orb_check(_v_traj_sp_sub, &updated);
-
-	if (updated) {
-		orb_copy(ORB_ID(trajectory_setpoint), _v_traj_sp_sub, &_v_traj_sp);
-	}
-}
-
 // Gives back orientation error between R and R_des
 math::Vector<3> UUVAttControl::rotError(math::Matrix<3,3> R, math::Matrix<3,3> R_des)
 {
@@ -390,32 +371,16 @@ math::Vector<3> UUVAttControl::rotError(math::Matrix<3,3> R, math::Matrix<3,3> R
  */
 void UUVAttControl::att_control(float dt)
 {
-     // actualize setpoint data
-	//trajectory_setpoint_poll();
-
     // Count time
     t_ges = t_ges + dt;
 
 	//*******************************
 	//  Declaration of Variables
 	//*******************************
-	// define error vectors
 	math::Vector<3> e_r;            // orientation error
-//	math::Vector<3> e_p;            // position error
-//	math::Vector<3> e_v;            // velocity error
-//	math::Matrix<3, 3> e_r_matrix;  // orientation error matrix
-//	math::Vector<3> e_w;            // angular velocity error
 
     float u_1;                      // thrust input
 	math::Vector<3> u_24;           // desired actuator signals
-
-/*
-	// get actual position data
-	math::Vector<3> r;                      // actual position
-	math::Vector<3> rd;                     // actual velocity
-	math::Vector<3> rdd;                    // actual acceleration
-	math::Vector<3> rddd;
-*/
 
 	// rotation matrices and angular velocity vectors
 	math::Vector<3> e_w(_v_att.rollspeed, _v_att.pitchspeed, _v_att.yawspeed);      // angular velocity error
@@ -577,7 +542,7 @@ int UUVAttControl::start()
 	_control_task = px4_task_spawn_cmd("uuv_att_control",
 					   SCHED_DEFAULT,
 					   SCHED_PRIORITY_MAX - 5,
-					   5000, //
+					   1500,
 					   (px4_main_t)&UUVAttControl::task_main_trampoline,
 					   nullptr);
 

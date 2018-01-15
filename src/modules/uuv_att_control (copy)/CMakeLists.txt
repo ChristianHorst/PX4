@@ -31,12 +31,12 @@
 #
 ############################################################################
 px4_add_module(
-	MODULE modules__path_contr
-	MAIN path_contr
+	MODULE modules__uuv_att_control
+	MAIN uuv_att_control
 	STACK_MAIN 2000
 	SRCS
-		path_contr_main.cpp
-		path_contr_params.c
+		uuv_att_control_main.cpp
+		uuv_att_control_params.c
 	DEPENDS
 		platforms__common
 	)

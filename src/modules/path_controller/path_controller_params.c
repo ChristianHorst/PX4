@@ -114,7 +114,7 @@ PARAM_DEFINE_FLOAT(PathC_X_u, 5.39f);
  * Damping Y-direction
  *
  */
-PARAM_DEFINE_FLOAT(PC_Y_v, 17.36f);
+PARAM_DEFINE_FLOAT(PathC_Y_v, 17.36f);
 
 /**
  * Damping Z-direction
@@ -156,7 +156,7 @@ PARAM_DEFINE_FLOAT(PathC_ROLL, 0.0f);
  * Desired Angle Pitch
  *
  */
-PARAM_DEFINE_FLOAT(PathC_PITCH, 1.5f); //1.5
+PARAM_DEFINE_FLOAT(PathC_PITCH, 0.0f); //1.5
 
 /**
  * Desired Angle Yaw
@@ -165,3 +165,4 @@ PARAM_DEFINE_FLOAT(PathC_PITCH, 1.5f); //1.5
 PARAM_DEFINE_FLOAT(PathC_YAW, 0.0f);
 
 
+PARAM_DEFINE_FLOAT(PathC_SCALE, 0.0f);

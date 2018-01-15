@@ -37,6 +37,7 @@ px4_add_module(
 	STACK_MAX 1300
 	SRCS
                 ekf_position_main.cpp
+		ekf_position_params.c
                
 	DEPENDS
 		platforms__common

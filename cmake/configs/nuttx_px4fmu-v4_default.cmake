@@ -87,9 +87,9 @@ set(config_module_list
         modules/ekf_position
         #modules/water_depth_control_2
         modules/raw_pressure
-        modules/path_controller
+        #modules/path_controller
         modules/trajectory_planner
-        #modules/path_contr
+        modules/path_contr
         modules/circle_contr
 
 
@@ -136,8 +136,8 @@ set(config_module_list
         #modules/gnd_pos_control
         #modules/mc_att_control
         #modules/mc_pos_control
-	modules/vtol_att_control
-        modules/uuv_att_control
+        modules/vtol_att_control
+        #modules/uuv_att_control
 
 	#
 	# Logging
@@ -189,6 +189,7 @@ set(config_module_list
 	# Rover apps
 	#
 	examples/rover_steering_control
+
 
 	#
 	# Segway

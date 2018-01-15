@@ -12,8 +12,8 @@ orb_advert_t mavlink_log_pub = nullptr;
 static const uint32_t 		EST_STDDEV_XY_VALID = 2.0; // 2.0 m
 static const uint32_t 		EST_STDDEV_Z_VALID = 2.0; // 2.0 m
 static const uint32_t 		EST_STDDEV_TZ_VALID = 2.0; // 2.0 m
-      double n=1; //counter
-      double k=1; //counter
+ //     double n=1; //counter
+      double mocap_init=1; //counter
 
 static const float P_MAX = 1.0e6f; // max allowed value in state covariance
 static const float LAND_RATE = 10.0f; // rate of land detector correction
@@ -525,17 +525,17 @@ void BlockLocalPositionEstimator::update()
     /* Since we never achieved the mocapCorrect() loop, I changed the loop*/
     if (mocapUpdated) {
 
-        if (k<2) {
+        if (mocap_init < 2) {
             mocapInit();
-            k = k+1;
+            mocap_init = mocap_init+1;
             PX4_INFO("Got Mocap Init");
         } else {
             mocapCorrect();
-            k=k+1;
-                if(k>20){
-                    k=1;
+            mocap_init=mocap_init+1;
+                if(mocap_init>20){
+                    mocap_init=1;
                 }
-            PX4_INFO("Got Mocap correct");
+       //     PX4_INFO("Got Mocap correct");
         }
     }
 

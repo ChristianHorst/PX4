@@ -46,19 +46,19 @@
  * Factor for the position error.
  *
  */
-PARAM_DEFINE_FLOAT(PC_K_PX, 1.0f);
-PARAM_DEFINE_FLOAT(PC_K_PY, 1.0f);
-PARAM_DEFINE_FLOAT(PC_K_PZ, 1.0f);
+PARAM_DEFINE_FLOAT(PC_K_PX, 2.0f); //1
+PARAM_DEFINE_FLOAT(PC_K_PY, 2.0f); //1
+PARAM_DEFINE_FLOAT(PC_K_PZ, 1.0f); //1
 
 /**
  * K_V derivative position gain
  *
- * Factor for the position error.
+ * Factor for the velocity error.
  *
  */
-PARAM_DEFINE_FLOAT(PC_K_VX, 1.0f);
-PARAM_DEFINE_FLOAT(PC_K_VY, 1.0f);
-PARAM_DEFINE_FLOAT(PC_K_VZ, 1.0f);
+PARAM_DEFINE_FLOAT(PC_K_VX, 1.5f); //1
+PARAM_DEFINE_FLOAT(PC_K_VY, 1.5f); //1
+PARAM_DEFINE_FLOAT(PC_K_VZ, 1.0f); //1
 
 /**
  * K_P proportional angel gain
@@ -66,9 +66,9 @@ PARAM_DEFINE_FLOAT(PC_K_VZ, 1.0f);
  * Factor for the angular error.
  *
  */
-PARAM_DEFINE_FLOAT(PC_K_RX, 1.0f);
-PARAM_DEFINE_FLOAT(PC_K_RY, 1.0f);
-PARAM_DEFINE_FLOAT(PC_K_RZ, 1.0f);
+PARAM_DEFINE_FLOAT(PC_K_RX, 1.0f); //1
+PARAM_DEFINE_FLOAT(PC_K_RY, 2.0f); //1
+PARAM_DEFINE_FLOAT(PC_K_RZ, 2.0f); //1
 
 /**
  * K_W derivative angel gain
@@ -76,9 +76,9 @@ PARAM_DEFINE_FLOAT(PC_K_RZ, 1.0f);
  * Factor for the angel velocity error.
  *
  */
-PARAM_DEFINE_FLOAT(PC_K_WX, 1.0f);
-PARAM_DEFINE_FLOAT(PC_K_WY, 1.0f);
-PARAM_DEFINE_FLOAT(PC_K_WZ, 1.0f);
+PARAM_DEFINE_FLOAT(PC_K_WX, 1.0f); //1
+PARAM_DEFINE_FLOAT(PC_K_WY, 1.5f); //1
+PARAM_DEFINE_FLOAT(PC_K_WZ, 1.5f);  //1
 
 /**
  * Mass of the Hippocampus
@@ -156,11 +156,23 @@ PARAM_DEFINE_FLOAT(PC_ROLL, 0.0f);
  * Desired Angle Pitch
  *
  */
-PARAM_DEFINE_FLOAT(PC_PITCH, 1.5f);
+PARAM_DEFINE_FLOAT(PC_PITCH, 0.0f); //1.5
 
 /**
  * Desired Angle Yaw
  *
  */
 PARAM_DEFINE_FLOAT(PC_YAW, 0.0f);
+
+/**
+ * Actuator_control vector scale: Scale if Scale = 1 no scale if SCALE = 0
+ *
+ */
+PARAM_DEFINE_FLOAT(PC_SCALE, 0.0f);
+
+/**
+ * Mix-matrix from simulation =0; Mix-matrix from real system =1;
+ *
+ */
+PARAM_DEFINE_FLOAT(PC_MIX, 0.0f);
 

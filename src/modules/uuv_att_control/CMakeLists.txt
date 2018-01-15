@@ -33,7 +33,8 @@
 px4_add_module(
 	MODULE modules__uuv_att_control
 	MAIN uuv_att_control
-	STACK_MAIN 2000
+	STACK_MAIN 5700
+	STACK_MAX 10000
 	SRCS
 		uuv_att_control_main.cpp
 		uuv_att_control_params.c

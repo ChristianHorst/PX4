@@ -33,7 +33,7 @@
 #include <systemlib/param/param.h>
 
 /**
- * @file path_contr_params.c
+ * @file path_controller_params.c
  * Parameters for path controller for the Hippocampus.
  *
  * @author Nils Rottmann <Nils.Rottmann@tuhh.de>
@@ -41,86 +41,33 @@
 
 
 /**
- * K_P proportional position gain
- *
- * Factor for the position error.
- *
- */
-PARAM_DEFINE_FLOAT(PC_K_PX, 1.0f);
-PARAM_DEFINE_FLOAT(PC_K_PY, 1.0f);
-PARAM_DEFINE_FLOAT(PC_K_PZ, 1.0f);
-
-/**
- * K_V derivative position gain
- *
- * Factor for the position error.
- *
- */
-PARAM_DEFINE_FLOAT(PC_K_VX, 1.0f);
-PARAM_DEFINE_FLOAT(PC_K_VY, 1.0f);
-PARAM_DEFINE_FLOAT(PC_K_VZ, 1.0f);
-
-/**
  * K_P proportional angel gain
  *
  * Factor for the angular error.
  *
  */
-PARAM_DEFINE_FLOAT(PC_K_RX, 1.0f);
-PARAM_DEFINE_FLOAT(PC_K_RY, 1.0f);
-PARAM_DEFINE_FLOAT(PC_K_RZ, 1.0f);
 
+// PARAM_DEFINE_FLOAT(PC_K_RX, 1.0f);
+//PARAM_DEFINE_FLOAT(PC_K_RY, 1.0f);
+//PARAM_DEFINE_FLOAT(PC_K_RZ, 1.0f);
+
+PARAM_DEFINE_FLOAT(PC_K_RX, 0.8f);
+PARAM_DEFINE_FLOAT(PC_K_RY, 0.8f);
+PARAM_DEFINE_FLOAT(PC_K_RZ, 1.0f);
 /**
  * K_W derivative angel gain
  *
  * Factor for the angel velocity error.
  *
  */
-PARAM_DEFINE_FLOAT(PC_K_WX, 1.0f);
-PARAM_DEFINE_FLOAT(PC_K_WY, 1.0f);
+
+//PARAM_DEFINE_FLOAT(PC_K_WX, 1.0f);
+//PARAM_DEFINE_FLOAT(PC_K_WY, 1.0f);
+//PARAM_DEFINE_FLOAT(PC_K_WZ, 1.0f);
+
+PARAM_DEFINE_FLOAT(PC_K_WX, 0.5f);
+PARAM_DEFINE_FLOAT(PC_K_WY, 0.7f);
 PARAM_DEFINE_FLOAT(PC_K_WZ, 1.0f);
-
-/**
- * Mass of the Hippocampus
- *
- */
-PARAM_DEFINE_FLOAT(PC_m, 1.47f);
-
-/**
- * Added mass X-direction
- *
- */
-PARAM_DEFINE_FLOAT(PC_X_du, 1.11f);
-
-/**
- * Added mass Y-direction
- *
- */
-PARAM_DEFINE_FLOAT(PC_Y_du, 2.8f);
-
-/**
- * Added mass Z-direction
- *
- */
-PARAM_DEFINE_FLOAT(PC_Z_dw, 2.8f);
-
-/**
- * Damping X-direction
- *
- */
-PARAM_DEFINE_FLOAT(PC_X_u, 5.39f);
-
-/**
- * Damping Y-direction
- *
- */
-PARAM_DEFINE_FLOAT(PC_Y_v, 17.36f);
-
-/**
- * Damping Z-direction
- *
- */
-PARAM_DEFINE_FLOAT(PC_Z_w, 17.36f);
 
 /**
  * Force scaling constant, should be the same as given in the simulation
@@ -139,12 +86,6 @@ PARAM_DEFINE_FLOAT(PC_K_M, 0.02f);
  *
  */
 PARAM_DEFINE_FLOAT(PC_L, 0.0481f);
-
-/**
- * Operating Grade
- *
- */
-PARAM_DEFINE_FLOAT(PC_OG, 1.0f);
 
 /**
  * Desired Angle Roll

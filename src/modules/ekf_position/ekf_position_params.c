@@ -33,71 +33,18 @@
 #include <systemlib/param/param.h>
 
 /**
- * @file path_controller_params.c
+ * @file path_contr_params.c
  * Parameters for path controller for the Hippocampus.
  *
- * @author Nils Rottmann <Nils.Rottmann@tuhh.de>
+ * @author Viktor Rausch <Viktor.Rausch@tuhh.de>
  */
 
 
-//*****************************
-//* Point Function
-//*****************************
 /**
- * x coordinate for point control
+ *angle alpha for coordinate transformation
  */
-PARAM_DEFINE_FLOAT(TP_POINT_X, 2.0);
+PARAM_DEFINE_FLOAT(EKF_ALPHA, -45.0f);
 
-/**
- * y coordinate for point control
- */
-PARAM_DEFINE_FLOAT(TP_POINT_Y, 1.5);
 
-/**
- * z coordinate for point control
- */
-PARAM_DEFINE_FLOAT(TP_POINT_Z, 1.0);
 
-//******************************
-//* Circle Function
-//******************************
-/**
- * radius
- */
-PARAM_DEFINE_FLOAT(TP_CIRCLE_R, 4.0);
 
-/**
- * Periodtime
- */
-PARAM_DEFINE_FLOAT(TP_CIRCLE_T, 100.0);
-/**
- * Center Position
- */
-PARAM_DEFINE_FLOAT(TP_CIRCLE_X, 2.0);
-PARAM_DEFINE_FLOAT(TP_CIRCLE_Y, 1.0);
-
-//******************************
-//* Spiral Function
-//******************************
-/**
- * descent rate per circle
- */
-PARAM_DEFINE_FLOAT(TP_SPIRAL_DESC, 4.0);
-
-//******************************
-//* Random Trajectory Function
-//******************************
-/**
- * Velocity
- */
-PARAM_DEFINE_FLOAT(TP_RANDOM_V, 0.25);
-
-/**
- * Time Step Size
- */
-PARAM_DEFINE_FLOAT(TP_RANDOM_DT, 0.02);
-/**
- * Angle for coordinate transformation
- */
-
-PARAM_DEFINE_FLOAT(TP_ALPHA, -45.0f);

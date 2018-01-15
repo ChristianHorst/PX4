@@ -64,6 +64,7 @@
 // uORB topics
 #include <uORB/uORB.h>
 #include <uORB/topics/trajectory_setpoint.h>
+#include <uORB/topics/debug_vect.h>
 #include <uORB/topics/parameter_update.h>
 // system libraries
 #include <systemlib/param/param.h>
@@ -106,9 +107,11 @@ private:
 
 	// topic publications
 	orb_advert_t    _v_traj_sp_pub;
+	orb_advert_t    _position_sp_pub;
 
 	// topic structures, in this structures the data of the topics are stored
 	struct trajectory_setpoint_s	        _v_traj_sp;			// vehicle attitude setpoint
+	struct debug_vect_s	        _position_sp;			// To show the setpoint in QGroundControl
 
 	// performance counters
 	perf_counter_t	_loop_perf;
@@ -119,6 +122,7 @@ private:
   	std::normal_distribution<float> distribution;
     constexpr static int rand_n = 10;
   	int rand_counter;
+  	int print_counter;
   	math::Matrix<rand_n,2> rand_u;
   	math::Matrix<rand_n,rand_n> Sigma;
   	math::Vector<5> act_state;
@@ -135,9 +139,12 @@ private:
 		param_t point_z;
 		param_t circle_r;
 		param_t circle_t;
+		param_t circle_x;
+		param_t circle_y;
 		param_t spiral_desc;
 		param_t random_v;
 		param_t random_dt;
+		param_t ALPHA;
 	}		_params_handles;		// handles for to find parameters
 
 	struct {
@@ -146,9 +153,12 @@ private:
 		float point_z;
 		float circle_r;
 		float circle_t;
+		float circle_x;
+		float circle_y;
 		float spiral_desc;
 		float random_v;
 		float random_dt;
+		double alpha;
 	}		_params;
 
 	// path controller.
@@ -193,6 +203,7 @@ HippocampusTrajectoryPlanner::HippocampusTrajectoryPlanner(char *type_traj) :
 
 	// publications
 	_v_traj_sp_pub(nullptr),
+    _position_sp_pub(nullptr),
 
 	// performance counters
 	_loop_perf(perf_alloc(PC_ELAPSED, "path_controller")),
@@ -212,9 +223,12 @@ HippocampusTrajectoryPlanner::HippocampusTrajectoryPlanner(char *type_traj) :
 	_params.point_z = 0;
 	_params.circle_r = 0;
 	_params.circle_t = 0;
+	_params.circle_x = 0;
+	_params.circle_y = 0;
 	_params.spiral_desc = 0;
 	_params.random_v = 0;
 	_params.random_dt = 0;
+	_params.alpha = 0;
 
 	// random initializing
 	rand_counter = 0;
@@ -230,7 +244,7 @@ HippocampusTrajectoryPlanner::HippocampusTrajectoryPlanner(char *type_traj) :
 
 	// set time counter to zero
 	t_ges = 0.0f;
-
+    print_counter = 1;
 	// allocate trajectory type
 	strcpy(&type_array[0], type_traj);
 
@@ -251,9 +265,12 @@ HippocampusTrajectoryPlanner::HippocampusTrajectoryPlanner(char *type_traj) :
 	_params_handles.point_z         = 	    param_find("TP_POINT_Z");
 	_params_handles.circle_r        = 	    param_find("TP_CIRCLE_R");
 	_params_handles.circle_t        = 	    param_find("TP_CIRCLE_T");
+	_params_handles.circle_x        = 	    param_find("TP_CIRCLE_X");
+	_params_handles.circle_y        = 	    param_find("TP_CIRCLE_Y");
     _params_handles.spiral_desc     = 	    param_find("TP_SPIRAL_DESC");
     _params_handles.random_v        = 	    param_find("TP_RANDOM_V");
     _params_handles.random_dt       = 	    param_find("TP_RANDOM_DT");
+    _params_handles.ALPHA           = 	    param_find("TP_ALPHA");
 
 	// fetch initial parameter values
 	parameters_update();
@@ -294,10 +311,15 @@ int HippocampusTrajectoryPlanner::parameters_update()
 	param_get(_params_handles.point_z, &_params.point_z);
 	param_get(_params_handles.circle_r, &_params.circle_r);
 	param_get(_params_handles.circle_t, &_params.circle_t);
+	param_get(_params_handles.circle_x, &_params.circle_x);
+	param_get(_params_handles.circle_y, &_params.circle_y);
 	param_get(_params_handles.spiral_desc, &_params.spiral_desc);
 	param_get(_params_handles.random_v, &_params.random_v);
 	param_get(_params_handles.random_dt, &_params.random_dt);
 
+		float v;
+	param_get(_params_handles.ALPHA, &v);
+    _params.alpha = v;
 	return OK;
 }
 
@@ -319,10 +341,18 @@ void HippocampusTrajectoryPlanner::parameter_update_poll()
 // Thius function gives back a simple point
 void HippocampusTrajectoryPlanner::point()
 {
+  //int alpha = -20.0;
 	// allocate position
+	//_position_sp.x = _params.point_x;
+    //_position_sp.y = _params.point_y;
+
 	_v_traj_sp.x = _params.point_x;         // x
 	_v_traj_sp.y = _params.point_y;         // y
+	//_v_traj_sp.x = _params.point_x*cosf(_params.alpha*M_PI/180)- _params.point_y*sinf(_params.alpha*M_PI/180);         // x
+	//_v_traj_sp.y = _params.point_x*sinf(_params.alpha*M_PI/180)+ _params.point_y*cosf(_params.alpha*M_PI/180);         // y
 	_v_traj_sp.z = _params.point_z;         // z
+
+
 
 	_v_traj_sp.dx = 0.0f;       // dx/dt
 	_v_traj_sp.dy = 0.0f;       // dy/dt
@@ -339,12 +369,24 @@ void HippocampusTrajectoryPlanner::point()
 	_v_traj_sp.roll = 0.0f;                  // no roll angle
 	_v_traj_sp.droll = 0.0f;
 
+    _position_sp.x = _v_traj_sp.x;
+    _position_sp.y = _v_traj_sp.y;
+
 	// publish setpoint data
 	orb_publish(ORB_ID(trajectory_setpoint), _v_traj_sp_pub, &_v_traj_sp);
-    /*PX4_INFO("e_p:\t%8.2f\t%8.2f\t%8.2f",
+	orb_publish(ORB_ID(debug_vect), _position_sp_pub, &_position_sp);
+
+/*
+    print_counter = print_counter+1;
+
+    if (print_counter >400){
+    PX4_INFO("desired position:\t%8.2f\t%8.2f\t%8.2f",
          (double)_v_traj_sp.x,
          (double)_v_traj_sp.y,
-         (double)_v_traj_sp.z);*/
+         (double)_v_traj_sp.z);
+         print_counter = 1;
+         }
+*/
 }
 
 // This function gives back a circle
@@ -365,9 +407,19 @@ void HippocampusTrajectoryPlanner::circle()
 	float sinus = sinf(ratio * t_ges);
 	float cosinus = cosf(ratio * t_ges);
 
+   // _position_sp.x = _params.circle_x + r * sinus;
+   // _position_sp.y = _params.circle_y - cosinus * r;
+
+    _params.circle_x = _params.circle_x*cosf(_params.alpha*M_PI/180)- _params.circle_y*sinf(_params.alpha*M_PI/180);
+    _params.circle_y = _params.circle_x*sinf(_params.alpha*M_PI/180)+ _params.circle_y*cosf(_params.alpha*M_PI/180);
+
 	// calculate position and their derivations
-	_v_traj_sp.x = r * sinus;               // x
-	_v_traj_sp.y = r - cosinus * r;         // y
+	//_v_traj_sp.x =  r * sinus;               // x
+	//_v_traj_sp.y = r - cosinus * r;         // y
+
+	_v_traj_sp.x = _params.circle_x + r * sinus;               // x
+	_v_traj_sp.y = _params.circle_y - cosinus * r;         // y
+
 	_v_traj_sp.z = 0.0f;                    // z
 
 	_v_traj_sp.dx = ratio * cosinus * r;    // dx/dt
@@ -385,8 +437,12 @@ void HippocampusTrajectoryPlanner::circle()
 	_v_traj_sp.roll = 0.0f;                  // no roll angle
 	_v_traj_sp.droll = 0.0f;
 
+    _position_sp.x = _v_traj_sp.x;
+    _position_sp.y = _v_traj_sp.y;
+    _position_sp.z = _v_traj_sp.z;
 	// publish setpoint data
 	orb_publish(ORB_ID(trajectory_setpoint), _v_traj_sp_pub, &_v_traj_sp);
+	orb_publish(ORB_ID(debug_vect), _position_sp_pub, &_position_sp);
 
 }
 
@@ -563,6 +619,7 @@ void HippocampusTrajectoryPlanner::task_main()
 
 	// publisher
 	_v_traj_sp_pub = orb_advertise(ORB_ID(trajectory_setpoint), &_v_traj_sp);
+	_position_sp_pub = orb_advertise(ORB_ID(debug_vect), &_position_sp);
 
 	// initialize parameters cache
 	parameters_update();
