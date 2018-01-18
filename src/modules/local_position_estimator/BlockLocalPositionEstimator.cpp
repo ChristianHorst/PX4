@@ -528,7 +528,7 @@ void BlockLocalPositionEstimator::update()
         if (mocap_init < 2) {
             mocapInit();
             mocap_init = mocap_init+1;
-            PX4_INFO("Got Mocap Init");
+           // PX4_INFO("Got Mocap Init");
         } else {
             mocapCorrect();
             mocap_init=mocap_init+1;

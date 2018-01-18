@@ -144,7 +144,8 @@ PARAM_DEFINE_FLOAT(PC_L, 0.0481f);
  * Operating Grade
  *
  */
-PARAM_DEFINE_FLOAT(PC_OG, 1.0f);
+PARAM_DEFINE_FLOAT(PC_OG_THRUST, 0.0f);
+PARAM_DEFINE_FLOAT(PC_OG_ANGLE, 0.2f);
 
 /**
  * Desired Angle Roll

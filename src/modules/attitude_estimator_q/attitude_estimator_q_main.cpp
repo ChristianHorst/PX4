@@ -349,7 +349,7 @@ void AttitudeEstimatorQ::task_main()
 				}
 			}
 		}
-
+/*
 		bool mocap_updated = false;
 		orb_check(_mocap_sub, &mocap_updated);
 
@@ -374,7 +374,7 @@ void AttitudeEstimatorQ::task_main()
 				}
 			}
 		}
-
+*/
 		bool gpos_updated = false;
 		orb_check(_global_pos_sub, &gpos_updated);
 

@@ -46,5 +46,11 @@
 PARAM_DEFINE_FLOAT(EKF_ALPHA, -45.0f);
 
 
+/**
+ *Position transformation from antenna to boat center : set to 1 for transformation
+ */
+PARAM_DEFINE_FLOAT(EKF_TRANS, 1.0f);
+
+
 
 

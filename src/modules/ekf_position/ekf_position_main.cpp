@@ -112,7 +112,7 @@
 #include <uORB/topics/att_pos_mocap.h>
 #include <uORB/topics/vehicle_attitude.h>
 #include <uORB/topics/debug_vect.h>
-#include <uORB/topics/debug_value.h>
+
 
 
 
@@ -157,23 +157,23 @@ private:
     int        counter;
     int         att_pos_mocap_int;
     float _dist_antenna;
-    //int         alpha;
 
     orb_advert_t	att_pos_mocap_pub;		/**< attitude_pos_mocap publication */
     orb_advert_t	debug_vect_pub;		/**Visualization with QGroundControl */
-    orb_advert_t	debug_value_pub;		/**Visualization with QGroundControl */
+
 
     struct att_pos_mocap_s _mocap_vec;
     struct debug_vect_s _debug_vect;
-    struct debug_value_s _debug_value;
     struct ekf_vector_s subscribed_ekf_vector;
     struct vehicle_attitude_s		    _v_att;		            // attitude data
     struct {
 		param_t EKF_ALPHA;
-	}		_params_handles;		// handles for to find parameters
+		param_t EKF_TRANS;
+	}		_params_handles;		// handling to find parameters
 
     struct {
 		double alpha;
+		int trans;
 	}		_params;
 
 
@@ -208,13 +208,12 @@ Read_EKF_Data::Read_EKF_Data() :
     _task_should_exit(false),
     _control_task(-1),
     subscribed_ekf_vector_int(-1),
-    debug_vect_pub(nullptr),
-    debug_value_pub(nullptr)
+    debug_vect_pub(nullptr)
+
 {
     memset(&_v_att, 0, sizeof(_v_att));
     _roh_g = 98.1;
     counter = 1;
-  //  alpha = -20;
  subscribed_ekf_vector.EKF_pos_x = 0;
  subscribed_ekf_vector.EKF_pos_y = 0;
  _mocap_vec.x = 0;
@@ -224,6 +223,7 @@ Read_EKF_Data::Read_EKF_Data() :
  sd_save = 0;
 
  _params_handles.EKF_ALPHA	        = 	param_find("EKF_ALPHA");
+ _params_handles.EKF_TRANS	        = 	param_find("EKF_TRANS");
 
     	// fetch initial parameter values
 	parameters_update();
@@ -260,6 +260,8 @@ int Read_EKF_Data::parameters_update()
 
 	param_get(_params_handles.EKF_ALPHA, &v);
 	_params.alpha = v;
+	param_get(_params_handles.EKF_TRANS, &v);
+	_params.trans = v;
 
 	return OK;
 }
@@ -313,41 +315,35 @@ void Read_EKF_Data::ekf_update_poll()
 
         /* Print the updatet absolut position and ekf covariance*/
 
-        n=n+1;
-        if (n > 30) {
-       PX4_INFO("EKF_Position:\t%.4f\t%.4f",
-                                       (double)subscribed_ekf_vector.EKF_pos_x,
-                                       (double)subscribed_ekf_vector.EKF_pos_y);
-                                                           n=1;
-                    }
+                                n=n+1;
+                                if (n > 30) {
+                                                PX4_INFO("EKF_Position:\t%.4f\t%.4f",
+                                                               (double)subscribed_ekf_vector.EKF_pos_x,
+                                                               (double)subscribed_ekf_vector.EKF_pos_y);
+                                                                                   n=1;
+                                            }
 
 
 
         /*Without rotation*/
-        //_mocap_vec.x = subscribed_ekf_vector.EKF_pos_x/1000;
-        //_mocap_vec.y = subscribed_ekf_vector.EKF_pos_y/1000;
+        _mocap_vec.x = subscribed_ekf_vector.EKF_pos_x/1000;
+        _mocap_vec.y = subscribed_ekf_vector.EKF_pos_y/1000;
 
         /*With rotation to NED coordinates*/
-        _mocap_vec.x = subscribed_ekf_vector.EKF_pos_x/1000*cosf(_params.alpha*M_PI/180)-subscribed_ekf_vector.EKF_pos_y/1000*sinf(_params.alpha*M_PI/180);
-        _mocap_vec.y = subscribed_ekf_vector.EKF_pos_x/1000*sinf(_params.alpha*M_PI/180)+subscribed_ekf_vector.EKF_pos_y/1000*cosf(_params.alpha*M_PI/180);
-          if (n <2) {
-       PX4_INFO("Pre_mocap:\t%.4f\t%.4f",
-                                       (double)_mocap_vec.x ,
-                                       (double)_mocap_vec.y );
+        //_mocap_vec.x = subscribed_ekf_vector.EKF_pos_x/1000*cosf(_params.alpha*M_PI/180)-subscribed_ekf_vector.EKF_pos_y/1000*sinf(_params.alpha*M_PI/180);
+        //_mocap_vec.y = subscribed_ekf_vector.EKF_pos_x/1000*sinf(_params.alpha*M_PI/180)+subscribed_ekf_vector.EKF_pos_y/1000*cosf(_params.alpha*M_PI/180);
 
-                    }
-
-
-
+        if (_params.trans == 1){
             _mocap_vec.x = _mocap_vec.x + x_B(0)*_dist_antenna;
             _mocap_vec.y = _mocap_vec.y + x_B(1)*_dist_antenna;
+            }
 
-             _debug_vect.z = _mocap_vec.x;
-             _debug_value.value = _mocap_vec.y;
+             _debug_vect.z = subscribed_ekf_vector.EKF_pos_x/1000;
+
 
         //orb_publish(ORB_ID(debug_vect), debug_vect_pub, &_debug_vect);
            if (n <2) {
-       PX4_INFO("After_mocap:\t%.4f\t%.4f",
+       PX4_INFO("After_Transformation:\t%.4f\t%.4f",
                                        (double)_mocap_vec.x ,
                                        (double)_mocap_vec.y );
 
@@ -356,36 +352,26 @@ void Read_EKF_Data::ekf_update_poll()
         parameters_update();
 
          }
- //   _mocap_vec.x = 1;
- //   _mocap_vec.y = 0.8;
+
 /*
         orb_copy(ORB_ID(att_pos_mocap), att_pos_mocap_int, &_mocap_vec);
 */
         /* give the mocap topic the new values*/
 
-       // _mocap_vec.z = 0.5;
+
         _mocap_vec.z = water_depth;
 
-        /* Print the mocap position*/
-       /* n=n+1;
-        if (n > 200) {
-                    PX4_INFO("Mocap_Position:\t%.4f\t%.4f\t%.4f",
-                                       (double)_mocap_vec.x,
-                                       (double)_mocap_vec.y,
-                                       (double)_mocap_vec.z);
-                                        n=1;
-                    }
-        */
 
-        /*Print vehicle_local_position*/
+/*
+        //Print vehicle_local_position
         orb_check(_vehicle_local_position, &updated);
         if (updated) {
                     struct vehicle_local_position_s v_pos;
 
-                    /* get pressure value from sensor*/
+                    // get pressure value from sensor
                     orb_copy(ORB_ID(vehicle_local_position), _vehicle_local_position, &v_pos);
 
-     /*               k=k+1;
+                    k=k+1;
                     if (k > 200) {
                                 PX4_INFO("local_position:\t%.4f\t%.4f\t%.4f",
                                                    (double)v_pos.x,
@@ -393,9 +379,9 @@ void Read_EKF_Data::ekf_update_poll()
                                                    (double)v_pos.z);
                                                     k=1;
                                 }
-  */
-                       }
 
+                       }
+ */
 
 /*
         //Print vehicle_local_position
@@ -421,6 +407,7 @@ void Read_EKF_Data::ekf_update_poll()
 
 //        struct vehicle_local_position_s v_pos_print;
 //        orb_copy(ORB_ID(vehicle_local_position), _vehicle_local_position, &v_pos_print);
+ /*
         FILE *sd;
          if (sd_save ==0 ){
             sd = fopen("/fs/microsd/Position_Data.txt","w");
@@ -439,7 +426,7 @@ void Read_EKF_Data::ekf_update_poll()
             (double)x_B(1),
             (double)x_B(2));
             fclose(sd);
-
+*/
 
 }
 
@@ -462,11 +449,9 @@ att_pos_mocap_int = orb_subscribe(ORB_ID(att_pos_mocap));
            usleep(20000);
            ekf_update_poll();
 
-        //   debug_vect_pub = orb_advertise(ORB_ID(debug_vect), &_debug_vect);
-        //   orb_publish(ORB_ID(debug_vect), debug_vect_pub, &_debug_vect);
+          // debug_vect_pub = orb_advertise(ORB_ID(debug_vect), &_debug_vect);
+          // orb_publish(ORB_ID(debug_vect), debug_vect_pub, &_debug_vect);
 
-         //  debug_value_pub = orb_advertise(ORB_ID(debug_value), &_debug_value);
-        //   orb_publish(ORB_ID(debug_value), debug_value_pub, &_debug_value);
 
            att_pos_mocap_pub = orb_advertise(ORB_ID(att_pos_mocap), &_mocap_vec);
            orb_publish(ORB_ID(att_pos_mocap), att_pos_mocap_pub, &_mocap_vec);

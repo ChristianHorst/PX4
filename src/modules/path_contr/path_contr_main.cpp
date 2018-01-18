@@ -82,6 +82,7 @@
 #include <lib/mathlib/mathlib.h>
 #include <lib/geo/geo.h>
 #include <lib/tailsitter_recovery/tailsitter_recovery.h>
+#include <uORB/topics/debug_value.h>
 
 
 // Hippocampus path controller
@@ -106,16 +107,19 @@ private:
 	int		_control_task;			// task handle
 
 	// topic subscriptions
+
 	int		_v_att_sub;		        // orientation data
 	int     _v_pos_sub;             // position data
 	int		_params_sub;			// parameter updates subscription
 	int		_v_traj_sp_sub;			// trajectory setpoint subscription
+    int		_debug_value_sub;		 // debug_value
 	int     sd_save;
 
 	// topic publications
 	orb_advert_t	_actuators_0_pub;		    // attitude actuator controls publication
 	orb_advert_t    _logging_hippocampus_pub;   // logging data publisher
 	orb_id_t        _actuators_id;	            // pointer to correct actuator controls0 uORB metadata structure
+	orb_advert_t	_debug_value_pub;		    // attitude actuator controls publication
 
 	// topic structures, in this structures the data of the topics are stored
 	struct actuator_controls_s			_actuators;			    // actuator controls
@@ -123,6 +127,7 @@ private:
 	struct vehicle_attitude_s		    _v_att;		            // attitude data
 	struct vehicle_local_position_s		_v_pos;		            // attitude data
 	struct trajectory_setpoint_s	    _v_traj_sp;			    // trajectory setpoint
+	struct debug_value_s	    _debug_value;			    // trajectory setpoint
 
 	// performance counters
 	perf_counter_t	_loop_perf;
@@ -166,7 +171,8 @@ private:
 		param_t K_F;
 		param_t K_M;
 		param_t L;
-		param_t OG;
+		param_t OG_THRUST;
+		param_t OG_ANGLE;
 		param_t ROLL;
 		param_t PITCH;
 		param_t YAW;
@@ -189,7 +195,8 @@ private:
 		float k_M;
 		// Lifting arm
 		float L;
-		float OG;                       // operating grade
+		float OG_thrust;                       // operating grade
+		float OG_angle;                       // operating grade
 		float roll;
 		float pitch;
 		float yaw;
@@ -247,15 +254,17 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
 	_v_pos_sub(-1),
 	_params_sub(-1),
 	_v_traj_sp_sub(-1),
+	_debug_value_sub(-1),
 
 	// publications
 	_actuators_0_pub(nullptr),
 	_logging_hippocampus_pub(nullptr),
 	_actuators_id(nullptr),
+	_debug_value_pub(nullptr),
 
 
 	// performance counters
-        _loop_perf(perf_alloc(PC_ELAPSED, "path_contr")),
+    _loop_perf(perf_alloc(PC_ELAPSED, "path_contr")),
 	_controller_latency_perf(perf_alloc_once(PC_ELAPSED, "ctrl_latency"))
 
 // here starts the allocation of values to the variables
@@ -277,7 +286,8 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
 	_params.M_A.zero();
 	_params.D.zero();
 	_params.L = 0.0f;
-	_params.OG = 0.0f;
+	_params.OG_thrust = 0.0f;
+	_params.OG_angle = 0.0f;
 	_params.roll = 0.0f;
 	_params.pitch = 0.0f;
 	_params.yaw = 0.0f;
@@ -328,7 +338,8 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
 	_params_handles.K_F		        = 	param_find("PC_K_F");
 	_params_handles.K_M		        = 	param_find("PC_K_M");
 	_params_handles.L	            = 	param_find("PC_L");
-	_params_handles.OG	            = 	param_find("PC_OG");
+	_params_handles.OG_THRUST	    = 	param_find("PC_OG_THRUST");
+    _params_handles.OG_ANGLE	    = 	param_find("PC_OG_ANGLE");
 	_params_handles.ROLL	        = 	param_find("PC_ROLL");
 	_params_handles.PITCH	        = 	param_find("PC_PITCH");
 	_params_handles.YAW	            = 	param_find("PC_YAW");
@@ -413,8 +424,10 @@ int HippocampusPathControl::parameters_update()
 	_params.k_M = v;
 	param_get(_params_handles.L, &v);
 	_params.L = v;
-    param_get(_params_handles.OG, &v);
-	_params.OG = v;
+    param_get(_params_handles.OG_THRUST, &v);
+	_params.OG_thrust = v;
+	param_get(_params_handles.OG_ANGLE, &v);
+	_params.OG_angle = v;
 	param_get(_params_handles.ROLL, &v);
 	_params.roll = v;
 	param_get(_params_handles.PITCH, &v);
@@ -767,31 +780,40 @@ void HippocampusPathControl::path_control(float dt)
 	// Generating C_mix matrix for recalculation to Mixer Inputs
 ///*
 
-if (_params.mix == 0){
-        float C_MIX[4][4] = {
-		{ -1, -1, 1, 1},
-		{1, -1, -1, 1},
-		{ -1, 1, -1, 1},
-		{1, 1, 1, 1}
-	    };
-}else if ( _params.mix == 1){
+float C_MIX[4][4];
+math::Matrix<4, 4> C_mix(C_MIX);
+float C_MIX_sim[4][4]= {
+            { -1, -1, 1, 1},
+            {1, -1, -1, 1},
+            { -1, 1, -1, 1},
+            {1, 1, 1, 1}
+            };
+ float C_MIX_real[4][4]= {
+            { -1, -1, 1, 1},
+            {-1, 1, 1, -1},
+            { -1, 1, -1, 1},
+            {-1, -1, -1, -1}
+            };
+  math::Matrix<4, 4> C_mix_sim(C_MIX_sim);
+  math::Matrix<4, 4> C_mix_real(C_MIX_real);
+
+    if (_params.mix == 0){
+    //simulation
+    C_mix = C_MIX_sim;
 
 
-        float C_MIX[4][4] = {
-		{ -1, -1, 1, 1},
-		{-1, 1, 1, -1},
-		{ -1, 1, -1, 1},
-		{-1, -1, -1, -1}
-	};
-}
+    }else if (_params.mix == 1){
+    //real environement
+    C_mix = C_MIX_real;
+    }
 
-	math::Matrix<4, 4> C_mix(C_MIX);
+
 
 	// calculate the desired rotor velocities
 	math::Vector<4> mix_input = C_mix.inversed() * omega_des;
 
 	// Reduce Input signal by a certain percentage
-	mix_input = mix_input * _params.OG;
+	//mix_input = mix_input * _params.OG;
 
   //  math::Vector<4> mix_input = u_ges * _params.OG;
 
@@ -799,10 +821,10 @@ if (_params.mix == 0){
 	// give the inputs to the actuators
     if (_params.scale == 1){
     //Thrust and yaw -control
-            _actuators.control[0] = 0.0f;       // roll
-            _actuators.control[1] = 0.0f;       // pitch
-            _actuators.control[2] = mix_input(2);           // yaw
-            _actuators.control[3] = mix_input(3);           // thrust
+            _actuators.control[0] = 0.0f * _params.OG_angle;       // roll
+            _actuators.control[1] = 0.0f * _params.OG_angle;       // pitch
+            _actuators.control[2] = mix_input(2) * _params.OG_angle;           // yaw
+            _actuators.control[3] = mix_input(3) * _params.OG_thrust;           // thrust
 
            //full control --> uncomment line 653
             /*
@@ -813,14 +835,14 @@ if (_params.mix == 0){
             */
 
     } else if ( _params.scale == 0){
-        u_ges = u_ges * _params.OG;
-            _actuators.control[0] = 0.0f;// mix_input(0);           // roll
-            _actuators.control[1] = 0.0f;//mix_input(1);           // pitch
-            _actuators.control[2] = u_ges(3);           // yaw
-            _actuators.control[3] = u_ges(0);           // thrust
+      //  u_ges = u_ges * _params.OG;
+            _actuators.control[0] = 0.0f * _params.OG_angle;// mix_input(0);           // roll
+            _actuators.control[1] = 0.0f * _params.OG_angle;//mix_input(1);           // pitch
+            _actuators.control[2] = u_ges(3) * _params.OG_angle;           // yaw
+            _actuators.control[3] = u_ges(0)* _params.OG_thrust;           // thrust
 
 	}
-        /*
+
 	    FILE *sd;
 
 	      if (sd_save ==0 ){
@@ -842,8 +864,10 @@ if (_params.mix == 0){
 			(double)e_r(1));
             fclose(sd);
 
-*/
+
 //	}
+
+
 
 	// store logging data for publishing
 	_logging_hippocampus.x = r(0);
@@ -877,9 +901,9 @@ if (_params.mix == 0){
 	_logging_hippocampus.zad[1] = z_B_des(1);
 	_logging_hippocampus.zad[2] = z_B_des(2);
 
-    _logging_hippocampus.xvc = flowVel(0);
-    _logging_hippocampus.yvc = flowVel(1);
-    _logging_hippocampus.zvc = flowVel(2);
+    _logging_hippocampus.xvc = e_r(0);
+    _logging_hippocampus.yvc = e_r(1);
+    _logging_hippocampus.zvc = e_r(2);
 
 	_logging_hippocampus.t = t_ges;
 
@@ -945,13 +969,16 @@ if (_params.mix == 0){
 
 	}
 
-
+/*
             if (!strcmp(type_array, "stop")) {
             _actuators.control[0] = 0;           // roll
             _actuators.control[1] = 0;           // pitch
             _actuators.control[2] = 0;           // yaw
             _actuators.control[3] = 0;           // thrust
         }
+
+        */
+        _debug_value.value = e_r(2);
 }
 
 // Just starts the task_main function
@@ -970,6 +997,7 @@ void HippocampusPathControl::task_main()
 	_v_pos_sub = orb_subscribe(ORB_ID(vehicle_local_position));
 	_params_sub = orb_subscribe(ORB_ID(parameter_update));
 	_v_traj_sp_sub = orb_subscribe(ORB_ID(trajectory_setpoint));
+	_debug_value_sub = orb_subscribe(ORB_ID(debug_value));
 
 	// initialize parameters cache
 	parameters_update();
@@ -1029,6 +1057,16 @@ void HippocampusPathControl::task_main()
 			} else {
 				_logging_hippocampus_pub = orb_advertise(ORB_ID(logging_hippocampus), &_logging_hippocampus);
 			}
+
+
+				// publish debug_valueor
+			if (_debug_value_pub != nullptr) {
+				orb_publish(ORB_ID(debug_value), _debug_value_pub, &_debug_value);
+
+			} else {
+				_debug_value_pub = orb_advertise(ORB_ID(debug_value), &_debug_value);
+			}
+
 
 			// publish actuator timestamps
 			_actuators.timestamp = hrt_absolute_time();

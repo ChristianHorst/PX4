@@ -76,6 +76,7 @@
 #include <lib/mathlib/mathlib.h>
 #include <lib/geo/geo.h>
 #include <lib/tailsitter_recovery/tailsitter_recovery.h>
+#include <uORB/topics/vehicle_local_position.h>
 
 
 //#include <memory.h>
@@ -103,8 +104,9 @@ private:
 	int		_control_task;			// task handle
 
 	// topic subscription
-	int		        _params_sub;			// parameter updates subscription
-
+	int		 _params_sub;			// parameter updates subscription
+    int     _v_pos_sub;             // position data
+    int        _vehicle_local_position;
 	// topic publications
 	orb_advert_t    _v_traj_sp_pub;
 	orb_advert_t    _position_sp_pub;
@@ -112,7 +114,7 @@ private:
 	// topic structures, in this structures the data of the topics are stored
 	struct trajectory_setpoint_s	        _v_traj_sp;			// vehicle attitude setpoint
 	struct debug_vect_s	        _position_sp;			// To show the setpoint in QGroundControl
-
+    struct vehicle_local_position_s v_pos;	            // attitude data
 	// performance counters
 	perf_counter_t	_loop_perf;
 	perf_counter_t	_controller_latency_perf;
@@ -123,12 +125,16 @@ private:
     constexpr static int rand_n = 10;
   	int rand_counter;
   	int print_counter;
+  	int setpoint_counter;
   	math::Matrix<rand_n,2> rand_u;
   	math::Matrix<rand_n,rand_n> Sigma;
   	math::Vector<5> act_state;
 
 	// time counter
 	float t_ges;
+
+	//position error
+	float e_p;
 
 	// trajectory type
 	char type_array[100];
@@ -145,6 +151,8 @@ private:
 		param_t random_v;
 		param_t random_dt;
 		param_t ALPHA;
+		param_t MAX_ERROR;
+		param_t WP_SHAPE;
 	}		_params_handles;		// handles for to find parameters
 
 	struct {
@@ -159,6 +167,8 @@ private:
 		float random_v;
 		float random_dt;
 		double alpha;
+		float ellipse_maxerror;
+		int wp_shape;
 	}		_params;
 
 	// path controller.
@@ -169,6 +179,7 @@ private:
 	void        circle();
 	void        spiral();
 	void        random();
+	void        ellipse();
 
 	math::Vector<5> KinematicModel(math::Vector<5> state_0, math::Vector<2> u);
 
@@ -183,6 +194,7 @@ private:
 
 	// Main attitude control task.
 	void		task_main();
+
 };
 
 
@@ -200,6 +212,7 @@ HippocampusTrajectoryPlanner::HippocampusTrajectoryPlanner(char *type_traj) :
 
 	// subscriptions
 	_params_sub(-1),
+    _v_pos_sub(-1),
 
 	// publications
 	_v_traj_sp_pub(nullptr),
@@ -229,9 +242,11 @@ HippocampusTrajectoryPlanner::HippocampusTrajectoryPlanner(char *type_traj) :
 	_params.random_v = 0;
 	_params.random_dt = 0;
 	_params.alpha = 0;
+	_params.wp_shape = 0;
 
 	// random initializing
 	rand_counter = 0;
+	setpoint_counter = 0;
 	rand_u.zero();
 	act_state.zero();
 	Sigma.zero();
@@ -257,6 +272,8 @@ HippocampusTrajectoryPlanner::HippocampusTrajectoryPlanner(char *type_traj) :
 		PX4_INFO("Trajectory Planner started! Modus Spiral!");
 	} else if (!strcmp(type_array, "random")) {
 		PX4_INFO("Trajectory Planner started! Modus Random!");
+	} else if (!strcmp(type_array, "ellipse")) {
+		PX4_INFO("Trajectory Planner started! Modus ellipse!");
 	}
 
 	// allocate parameter handles
@@ -271,6 +288,8 @@ HippocampusTrajectoryPlanner::HippocampusTrajectoryPlanner(char *type_traj) :
     _params_handles.random_v        = 	    param_find("TP_RANDOM_V");
     _params_handles.random_dt       = 	    param_find("TP_RANDOM_DT");
     _params_handles.ALPHA           = 	    param_find("TP_ALPHA");
+    _params_handles.MAX_ERROR       = 	    param_find("TP_MAX_ERROR");
+    _params_handles.WP_SHAPE       = 	    param_find("TP_WP_SHAPE");
 
 	// fetch initial parameter values
 	parameters_update();
@@ -318,8 +337,19 @@ int HippocampusTrajectoryPlanner::parameters_update()
 	param_get(_params_handles.random_dt, &_params.random_dt);
 
 		float v;
+		float v2;
 	param_get(_params_handles.ALPHA, &v);
     _params.alpha = v;
+    param_get(_params_handles.MAX_ERROR, &v);
+    _params.ellipse_maxerror = v;
+    param_get(_params_handles.WP_SHAPE, &v2);
+    //reset the setpoint_counter to 0
+        if (_params.wp_shape < v2 || _params.wp_shape > v2){
+            setpoint_counter = 0;
+            PX4_INFO("New Waypoint List:\t%8.2f",
+         (double)v2);
+        }
+    _params.wp_shape = v2;
 	return OK;
 }
 
@@ -338,14 +368,11 @@ void HippocampusTrajectoryPlanner::parameter_update_poll()
 	}
 }
 
-// Thius function gives back a simple point
+// This function gives back a simple point
 void HippocampusTrajectoryPlanner::point()
 {
-  //int alpha = -20.0;
-	// allocate position
-	//_position_sp.x = _params.point_x;
-    //_position_sp.y = _params.point_y;
 
+	// allocate position
 	_v_traj_sp.x = _params.point_x;         // x
 	_v_traj_sp.y = _params.point_y;         // y
 	//_v_traj_sp.x = _params.point_x*cosf(_params.alpha*M_PI/180)- _params.point_y*sinf(_params.alpha*M_PI/180);         // x
@@ -388,6 +415,114 @@ void HippocampusTrajectoryPlanner::point()
          }
 */
 }
+// This function gives back a simple point
+void HippocampusTrajectoryPlanner::ellipse()
+{
+    bool updated;
+    orb_check(_vehicle_local_position, &updated);
+        if (updated) {
+                      // get local position
+                    orb_copy(ORB_ID(vehicle_local_position), _vehicle_local_position, &v_pos);
+                       }
+
+  //  float x_set_point[11] = {0.8000, 0.9747, 1.4376, 2.0272, 2.5374, 2.7900, 2.6968, 2.2903, 1.7125, 1.1653, 0.8398};
+  // float y_set_point[11] = {0.8000, 0.5177, 0.3340, 0.3131, 0.4623, 0.7294, 1.0213, 1.2358, 1.2981, 1.1864, 0.9397};
+
+ //float x_set_point1[11] = {0.6500, 0.8247, 1.2876, 1.8772, 2.3874, 2.6400, 2.5468, 2.1403, 1.5625, 1.0153, 0.6898};
+ //float y_set_point1[11] = {0.8200, 0.5941, 0.4472, 0.4305, 0.5498, 0.7636, 0.9970, 1.1686, 1.2185, 1.1291, 0.9318};
+
+   float x_set_point1[11] = {0.85, 0.99, 1.36, 1.83, 2.24, 2.44, 2.37, 2.04, 1.58, 1.14, 0.88};
+   float y_set_point1[11] = {0.82, 0.68, 0.59, 0.58, 0.65, 0.78, 0.93, 1.04, 1.07, 1.01, 0.89};
+
+
+   float x_set_point2[4] = {0.8, 1.5, 2.2, 1.5 };
+   float y_set_point2[4] = {0.83, 0.58, 1.08, 0.83};
+
+   //float e_x = x_set_point[setpoint_counter]-v_pos.x;
+   //float e_y = y_set_point[setpoint_counter]-v_pos.y;
+   float x_set_point[11];
+   float y_set_point[11];
+   float e_x ;
+   float e_y ;
+   int counter_limit = 11;
+
+   //set the right setpoint list and counter limits
+       if (_params.wp_shape == 0){
+
+       for (int i = 0; i<11; i = i+1){
+            x_set_point[i] = x_set_point1[i];
+            y_set_point[i] = y_set_point1[i];
+                        }
+        counter_limit = 11;
+
+       }else {
+           for (int i = 0; i<4; i = i+1){
+                x_set_point[i] = x_set_point2[i];
+                y_set_point[i] = y_set_point2[i];
+            }
+        counter_limit = 4;
+        }
+
+    // allocate position
+    _v_traj_sp.x = x_set_point[setpoint_counter];         // x
+    _v_traj_sp.y = y_set_point[setpoint_counter];         // y
+    _v_traj_sp.z = 0;         // z
+
+    //error
+    e_x = x_set_point[setpoint_counter]-v_pos.x;
+    e_y = y_set_point[setpoint_counter]-v_pos.y;
+    //e_p = sqrt(pow(e_x,2)+pow(e_y,2));
+    e_p = (e_x * e_x) + (e_y * e_y);
+    e_p = sqrt(e_p);
+
+    if (e_p <= _params.ellipse_maxerror){
+        setpoint_counter = setpoint_counter+1;
+
+            if (setpoint_counter == counter_limit){
+                setpoint_counter = 0;}
+
+        PX4_INFO("Next Setpoint:\t%8.2f\t%8.2f",
+             (double)x_set_point[setpoint_counter],
+             (double)y_set_point[setpoint_counter]);
+        }
+
+
+
+
+	_v_traj_sp.dx = 0.0f;       // dx/dt
+	_v_traj_sp.dy = 0.0f;       // dy/dt
+	_v_traj_sp.dz = 0.0f;       // dz/dt
+
+	_v_traj_sp.ddx = 0.0f;
+	_v_traj_sp.ddy = 0.0f;
+	_v_traj_sp.ddz = 0.0f;
+
+	_v_traj_sp.dddx = 0.0f;
+	_v_traj_sp.dddy = 0.0f;
+	_v_traj_sp.dddz = 0.0f;
+
+	_v_traj_sp.roll = 0.0f;                  // no roll angle
+	_v_traj_sp.droll = 0.0f;
+
+    _position_sp.x = _v_traj_sp.x;
+    _position_sp.y = _v_traj_sp.y;
+
+	// publish setpoint data
+	orb_publish(ORB_ID(trajectory_setpoint), _v_traj_sp_pub, &_v_traj_sp);
+	orb_publish(ORB_ID(debug_vect), _position_sp_pub, &_position_sp);
+
+
+    print_counter = print_counter+1;
+
+    if (print_counter >300){
+    PX4_INFO("Setpoint+e_p:\t%8.2f\t%8.2f\t%8.2f",
+         (double)x_set_point[setpoint_counter],
+         (double)y_set_point[setpoint_counter],
+         (double)e_p);
+                 print_counter = 1;
+         }
+
+}
 
 // This function gives back a circle
 void HippocampusTrajectoryPlanner::circle()
@@ -407,11 +542,8 @@ void HippocampusTrajectoryPlanner::circle()
 	float sinus = sinf(ratio * t_ges);
 	float cosinus = cosf(ratio * t_ges);
 
-   // _position_sp.x = _params.circle_x + r * sinus;
-   // _position_sp.y = _params.circle_y - cosinus * r;
-
-    _params.circle_x = _params.circle_x*cosf(_params.alpha*M_PI/180)- _params.circle_y*sinf(_params.alpha*M_PI/180);
-    _params.circle_y = _params.circle_x*sinf(_params.alpha*M_PI/180)+ _params.circle_y*cosf(_params.alpha*M_PI/180);
+    //_params.circle_x = _params.circle_x*cosf(_params.alpha*M_PI/180)- _params.circle_y*sinf(_params.alpha*M_PI/180);
+    //_params.circle_y = _params.circle_x*sinf(_params.alpha*M_PI/180)+ _params.circle_y*cosf(_params.alpha*M_PI/180);
 
 	// calculate position and their derivations
 	//_v_traj_sp.x =  r * sinus;               // x
@@ -439,7 +571,7 @@ void HippocampusTrajectoryPlanner::circle()
 
     _position_sp.x = _v_traj_sp.x;
     _position_sp.y = _v_traj_sp.y;
-    _position_sp.z = _v_traj_sp.z;
+
 	// publish setpoint data
 	orb_publish(ORB_ID(trajectory_setpoint), _v_traj_sp_pub, &_v_traj_sp);
 	orb_publish(ORB_ID(debug_vect), _position_sp_pub, &_position_sp);
@@ -602,6 +734,8 @@ void HippocampusTrajectoryPlanner::plan_trajectory(float dt)
 		spiral();
 	} else if (!strcmp(type_array, "random")) {
 		random();
+	} else if (!strcmp(type_array, "ellipse")) {
+		ellipse();
 	}
 }
 
@@ -616,6 +750,7 @@ void HippocampusTrajectoryPlanner::task_main()
 {
 	// subscriber
 	_params_sub = orb_subscribe(ORB_ID(parameter_update));              // initialize parameter update
+	 _vehicle_local_position = orb_subscribe(ORB_ID(vehicle_local_position));
 
 	// publisher
 	_v_traj_sp_pub = orb_advertise(ORB_ID(trajectory_setpoint), &_v_traj_sp);
@@ -673,12 +808,12 @@ int HippocampusTrajectoryPlanner::start()
 int trajectory_planner_main(int argc, char *argv[])
 {
 	if (argc < 2) {
-		warnx("usage: trajectory_planner {point|circle|spiral|random|stop|status}");
+		warnx("usage: trajectory_planner {point|circle|spiral|random|ellipse|stop|status}");
 		return 1;
 	}
 
 	// if a valid trajectory is chosen, only generate new class if none already exists
-	if (!strcmp(argv[1], "point") || !strcmp(argv[1], "circle") || !strcmp(argv[1], "spiral") || !strcmp(argv[1], "random")) {
+	if (!strcmp(argv[1], "point") || !strcmp(argv[1], "circle") || !strcmp(argv[1], "spiral") || !strcmp(argv[1], "random")|| !strcmp(argv[1], "ellipse") ) {
 
 
 		if (trajectory_planner::g_control != nullptr) {

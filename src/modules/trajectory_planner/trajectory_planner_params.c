@@ -101,3 +101,15 @@ PARAM_DEFINE_FLOAT(TP_RANDOM_DT, 0.02);
  */
 
 PARAM_DEFINE_FLOAT(TP_ALPHA, -45.0f);
+
+/**
+ * Max Error for elyptic way points
+ */
+
+PARAM_DEFINE_FLOAT(TP_MAX_ERROR, 0.2f);
+
+/**
+ * Different Waypoints diamond = 1, ellipse = 0;
+ */
+
+PARAM_DEFINE_FLOAT(TP_WP_SHAPE, 0.0f);
