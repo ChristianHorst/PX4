@@ -67,6 +67,7 @@
 // uORB topics
 #include <uORB/uORB.h>
 #include <uORB/topics/actuator_controls.h>              // this topic gives the actuators control input
+#include <uORB/topics/actuator_outputs.h>              // this topic gives the actuators control output
 #include <uORB/topics/vehicle_attitude.h>               // orientation data
 #include <uORB/topics/vehicle_local_position.h>         // position data
 #include <uORB/topics/trajectory_setpoint.h>
@@ -83,6 +84,7 @@
 #include <lib/geo/geo.h>
 #include <lib/tailsitter_recovery/tailsitter_recovery.h>
 #include <uORB/topics/debug_value.h>
+#include <uORB/topics/sensor_combined.h>
 
 
 // Hippocampus path controller
@@ -113,13 +115,17 @@ private:
 	int		_params_sub;			// parameter updates subscription
 	int		_v_traj_sp_sub;			// trajectory setpoint subscription
     int		_debug_value_sub;		 // debug_value
+    int     _actuator_outputs_sub;
 	int     sd_save;
+	int     yaw_drift_compensation_init;
+  //  int		_sensors_sub;
 
 	// topic publications
 	orb_advert_t	_actuators_0_pub;		    // attitude actuator controls publication
 	orb_advert_t    _logging_hippocampus_pub;   // logging data publisher
 	orb_id_t        _actuators_id;	            // pointer to correct actuator controls0 uORB metadata structure
 	orb_advert_t	_debug_value_pub;		    // attitude actuator controls publication
+    //orb_advert_t        _sensors_sub;
 
 	// topic structures, in this structures the data of the topics are stored
 	struct actuator_controls_s			_actuators;			    // actuator controls
@@ -127,8 +133,9 @@ private:
 	struct vehicle_attitude_s		    _v_att;		            // attitude data
 	struct vehicle_local_position_s		_v_pos;		            // attitude data
 	struct trajectory_setpoint_s	    _v_traj_sp;			    // trajectory setpoint
-	struct debug_value_s	    _debug_value;			    // trajectory setpoint
-
+	struct debug_value_s	            _debug_value;			    // debug value
+	struct sensor_combined_s	        sensors;			    // sensors
+	struct actuator_outputs_s            _actuator_output;
 	// performance counters
 	perf_counter_t	_loop_perf;
 	perf_counter_t	_controller_latency_perf;
@@ -142,6 +149,10 @@ private:
 	// time
 	float               t_ges;
 	float               counter;
+	float               yaw_counter;
+	float               yaw_compensated;
+    float               yaw_drift_compensation;
+    float               pi;
 
     // controller type
 	char type_array[100];
@@ -255,6 +266,8 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
 	_params_sub(-1),
 	_v_traj_sp_sub(-1),
 	_debug_value_sub(-1),
+	_actuator_outputs_sub(-1),
+	//_sensors_sub(-1),
 
 	// publications
 	_actuators_0_pub(nullptr),
@@ -301,6 +314,10 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
 
 	t_ges = 0.0;
 	counter = 0.0;
+	yaw_compensated = 0.0f;
+    yaw_drift_compensation = 0.0f;
+    pi = M_PI;
+    yaw_drift_compensation_init = 0;
 
 	// allocate controller type
 	strcpy(&type_array[0], type_ctrl);
@@ -310,6 +327,9 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
 
 	} else if (!strcmp(type_array, "attitude")) {
 		PX4_INFO("Start attitude controller!");
+
+	} else if (!strcmp(type_array, "WS")) {
+		PX4_INFO("Start WORK-SHOP controller!");
 	}
 
 	// allocate Identity matrix
@@ -513,6 +533,8 @@ void HippocampusPathControl::trajectory_setpoint_poll()
 	}
 }
 
+
+
 // Gives back orientation error between R and R_des
 math::Vector<3> HippocampusPathControl::rotError(math::Matrix<3,3> R, math::Matrix<3,3> R_des)
 {
@@ -586,7 +608,6 @@ void HippocampusPathControl::path_control(float dt)
 
     // actualize setpoint data
 	trajectory_setpoint_poll();
-
 	// count time
 	t_ges = t_ges + dt;
 
@@ -652,6 +673,10 @@ void HippocampusPathControl::path_control(float dt)
 	// Transform Matrices into World coordinates
     math::Matrix<3,3> M_A_W = R * _params.M_A * R.transposed();
     math::Matrix<3,3> D_W = R * _params.D * R.transposed();
+
+    //euler angles
+    matrix::Eulerf euler = matrix::Quatf(_v_att.q);
+
 
 	if (!strcmp(type_array, "full")) {
         math::Vector<3> z_C_des(0, -sinf(_v_traj_sp.roll), cosf(_v_traj_sp.roll));    // orientation C-Coordinate system desired
@@ -752,6 +777,77 @@ void HippocampusPathControl::path_control(float dt)
 
         u_1 = 0.0f;
         e_w = R.transposed() * w_BW;
+
+	}else if (!strcmp(type_array, "WS")) {
+
+	    e_p = r - r_T;                      // calculate position error
+	    e_v = rd - rd_T;                    // calculate velocity error
+
+        // calculate desired force
+
+	    F_des = - _params.K_p * e_p - _params.K_v * e_v + rdd_T * _params.m + M_A_W * rdd_T;
+        F_des(2) = 0;                                       // for only movement in x-y plane
+	    u_1 = F_des * x_B;
+
+
+
+        if (yaw_drift_compensation_init == 0){
+        yaw_drift_compensation_init =1;
+              if (euler.psi() > 0.0f){
+                    yaw_drift_compensation = euler.psi()/pi*180.0f;
+              }else if (euler.psi() < 0.0f){
+                    yaw_drift_compensation = 360.0f+(euler.psi()/pi*180.0f);
+                    }
+        }
+
+
+/*
+        if (yaw_counter < t_ges){
+        //yaw_counter = yaw_counter + 0.23f; // statt 0.23 gyro_z und statt 1.8 1
+       // yaw_drift_compensation = yaw_drift_compensation + 1.80f/1.0f;
+        yaw_counter = yaw_counter + 0.1f; // statt 0.23 gyro_z und statt 1.8 1
+        yaw_drift_compensation = yaw_drift_compensation + 0.7826f;
+        //yaw_counter = yaw_counter + sensors.gyro_rad[2]; // statt 0.23 gyro_z und statt 1.8 1
+        //yaw_drift_compensation = yaw_drift_compensation + 1.0f;
+            if (yaw_drift_compensation > 360){
+                yaw_drift_compensation = 0.0f;}
+        //PX4_INFO("YAW_DRIFT_COMPENSATION");
+        }
+
+        if (euler.psi() > 0.0f){
+        yaw_compensated = euler.psi()/pi*180.0f - yaw_drift_compensation;
+        }else if (euler.psi() < 0.0f){
+        yaw_compensated = 360.0f+(euler.psi()/pi*180.0f) - yaw_drift_compensation;
+        }
+
+        if (yaw_compensated < 180.0f ){
+        yaw_compensated = yaw_compensated/180.0f*pi;
+        } else if (yaw_compensated > 180.0f){
+        yaw_compensated = yaw_compensated/180.0f * pi - 2.0f *pi;}
+
+*/
+
+	    float psi_des = atan2f(r_T(1)-r(1),r_T(0)-r(0));
+	    e_r(2) = psi_des-euler.psi();
+
+	    if (e_r(2) > 4.0f){
+	    e_r(2) = e_r(2) - 2.0f * pi;
+	    }   else if (e_r(2) < -4.0f){
+	    e_r(2) = e_r(2) + 2.0f* pi;
+	    }
+
+
+	    float yaw_des = 0.0f;
+        e_w (2) = _v_att.yawspeed - yaw_des  ;
+/*
+        if (counter < t_ges) {
+        PX4_INFO("psi_des psi:\t%8.2f\t%8.2f\t%8.2f\t%8.2f\t%8.2f\n",
+			 (double)psi_des,
+			 (double)_v_att.q[0],
+			 (double)_v_att.q[1],
+			 (double)_v_att.q[2],
+			 (double)euler.psi());}
+*/
 	}
 
 	// calculate input over feedback loop
@@ -842,7 +938,7 @@ float C_MIX_sim[4][4]= {
             _actuators.control[3] = u_ges(0)* _params.OG_thrust;           // thrust
 
 	}
-
+/*
 	    FILE *sd;
 
 	      if (sd_save ==0 ){
@@ -863,11 +959,16 @@ float C_MIX_sim[4][4]= {
 			(double)e_r(0),
 			(double)e_r(1));
             fclose(sd);
-
+*/
 
 //	}
 
+	bool updated;
+	orb_check(_actuator_outputs_sub, &updated);
 
+	if (updated) {
+		orb_copy(ORB_ID(actuator_outputs), _actuator_outputs_sub, &_actuator_output);
+	}
 
 	// store logging data for publishing
 	_logging_hippocampus.x = r(0);
@@ -876,63 +977,60 @@ float C_MIX_sim[4][4]= {
 	_logging_hippocampus.xd = r_T(0);
 	_logging_hippocampus.yd = r_T(1);
 	_logging_hippocampus.zd = r_T(2);
-
-	_logging_hippocampus.xa[0] = x_B(0);
-	_logging_hippocampus.xa[1] = x_B(1);
-	_logging_hippocampus.xa[2] = x_B(2);
-
-	_logging_hippocampus.ya[0] = y_B(0);
-	_logging_hippocampus.ya[1] = y_B(1);
-	_logging_hippocampus.ya[2] = y_B(2);
-
-	_logging_hippocampus.za[0] = z_B(0);
-	_logging_hippocampus.za[1] = z_B(1);
-	_logging_hippocampus.za[2] = z_B(2);
-
-	_logging_hippocampus.xad[0] = x_B_des(0);
-	_logging_hippocampus.xad[1] = x_B_des(1);
-	_logging_hippocampus.xad[2] = x_B_des(2);
-
-	_logging_hippocampus.yad[0] = y_B_des(0);
-	_logging_hippocampus.yad[1] = y_B_des(1);
-	_logging_hippocampus.yad[2] = y_B_des(2);
-
-	_logging_hippocampus.zad[0] = z_B_des(0);
-	_logging_hippocampus.zad[1] = z_B_des(1);
-	_logging_hippocampus.zad[2] = z_B_des(2);
-
-    _logging_hippocampus.xvc = e_r(0);
-    _logging_hippocampus.yvc = e_r(1);
-    _logging_hippocampus.zvc = e_r(2);
-
+    _logging_hippocampus.e_r[0] = e_r(0);
+    _logging_hippocampus.e_r[1] = e_r(1);
+    _logging_hippocampus.e_r[2] = e_r(2);
+    _logging_hippocampus.yaw = euler.psi();
+    _logging_hippocampus.e_p[0] = e_p(0);
+    _logging_hippocampus.e_p[1] = e_p(1);
+    _logging_hippocampus.e_p[2] = e_p(2);
+    _logging_hippocampus.e_v[0] = e_v(0);
+    _logging_hippocampus.e_v[1] = e_v(1);
+    _logging_hippocampus.e_v[2] = e_v(2);
+    _logging_hippocampus.e_w[0] = e_w(0);
+    _logging_hippocampus.e_w[1] = e_w(1);
+    _logging_hippocampus.e_w[2] = e_w(2);
+    _logging_hippocampus.u_in[0] = _actuators.control[0];
+    _logging_hippocampus.u_in[1] = _actuators.control[1];
+    _logging_hippocampus.u_in[2] = _actuators.control[2];
+    _logging_hippocampus.u_in[3] = _actuators.control[3];
+    _logging_hippocampus.u_out[0] = _actuator_output.output[0];
+    _logging_hippocampus.u_out[1] = _actuator_output.output[1];
+    _logging_hippocampus.u_out[2] = _actuator_output.output[2];
+    _logging_hippocampus.u_out[3] = _actuator_output.output[3];
 	_logging_hippocampus.t = t_ges;
+
+
 
 	// Debugging
 	if (counter < t_ges) {
 
 		counter = counter + 5.0f;            // every 0.5 seconds
 
-        PX4_INFO("e_p:\t%8.2f\t%8.2f\t%8.2f",
+ /*       PX4_INFO("e_p:\t%8.2f\t%8.2f\t%8.2f",
 			 (double)e_p(0),
 			 (double)e_p(1),
 			 (double)e_p(2));
-//		/*
+*/
+		/*
 		PX4_INFO("e_v:\t%8.2f\t%8.2f\t%8.2f",
 			 (double)e_v(0),
 			 (double)e_v(1),
 			 (double)e_v(2));
-//*/
-
+*/
+/*
 		PX4_INFO("e_r:\t%8.2f\t%8.2f\t%8.2f",
 			 (double)e_r(0),
 			 (double)e_r(1),
 			 (double)e_r(2));
 
 
+
 		PX4_INFO("e_w:\t%8.2f\t%8.2f\t%8.2f\n",
 			 (double)e_w(0),
 			 (double)e_w(1),
              (double)e_w(2));
+
         PX4_INFO("r:\t%8.2f\t%8.2f\t%8.2f",
 			 (double)r(0),
 			 (double)r(1),
@@ -944,7 +1042,7 @@ float C_MIX_sim[4][4]= {
 
 	//	PX4_INFO("Thrust:\t%8.2f",
 	//		 (double)u_1);
-
+*/
 	/*
 
 
@@ -960,13 +1058,13 @@ float C_MIX_sim[4][4]= {
              (double)mix_input(2),
              (double)mix_input(3));
 */
-
+/*
        PX4_INFO("Actuators_control :\t%8.2f\t%8.2f\t%8.2f\t%8.2f",
              (double)_actuators.control[0],
              (double)_actuators.control[1],
              (double)_actuators.control[2],
              (double)_actuators.control[3]);
-
+*/
 	}
 
 /*
@@ -979,6 +1077,7 @@ float C_MIX_sim[4][4]= {
 
         */
         _debug_value.value = e_r(2);
+
 }
 
 // Just starts the task_main function
@@ -998,6 +1097,8 @@ void HippocampusPathControl::task_main()
 	_params_sub = orb_subscribe(ORB_ID(parameter_update));
 	_v_traj_sp_sub = orb_subscribe(ORB_ID(trajectory_setpoint));
 	_debug_value_sub = orb_subscribe(ORB_ID(debug_value));
+	_actuator_outputs_sub = orb_subscribe(ORB_ID(actuator_outputs));
+	int _sensors_sub = orb_subscribe(ORB_ID(sensor_combined));
 
 	// initialize parameters cache
 	parameters_update();
@@ -1046,6 +1147,9 @@ void HippocampusPathControl::task_main()
 			// copy position and orientation data
 			orb_copy(ORB_ID(vehicle_attitude), _v_att_sub, &_v_att);
             orb_copy(ORB_ID(vehicle_local_position), _v_pos_sub, &_v_pos);
+            //sensor_combined_s sensors;
+           // orb_copy(ORB_ID(sensor_combined), _sensor_combined_sub, &sensors);
+            orb_copy(ORB_ID(sensor_combined), _sensors_sub, &sensors);
 
 			// do path control
             path_control(dt);
@@ -1119,12 +1223,12 @@ int HippocampusPathControl::start()
 int path_contr_main(int argc, char *argv[])
 {
 	if (argc < 2) {
-                warnx("usage: path_contr {full|attitude|stop|status}");
+                warnx("usage: path_contr {full|attitude|WS|stop|status}");
 		return 1;
 	}
 
 	// if command is start, then first control if class exists already, if not, allocate new one
-	if (!strcmp(argv[1], "full") || !strcmp(argv[1], "attitude")) {
+	if (!strcmp(argv[1], "full") || !strcmp(argv[1], "attitude")||!strcmp(argv[1], "WS")) {
 
                 if (path_contr::g_control != nullptr) {
 			warnx("already running");

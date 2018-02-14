@@ -65,6 +65,7 @@
 #include <uORB/uORB.h>
 #include <uORB/topics/trajectory_setpoint.h>
 #include <uORB/topics/debug_vect.h>
+#include <uORB/topics/vehicle_global_position.h>
 #include <uORB/topics/parameter_update.h>
 // system libraries
 #include <systemlib/param/param.h>
@@ -110,10 +111,12 @@ private:
 	// topic publications
 	orb_advert_t    _v_traj_sp_pub;
 	orb_advert_t    _position_sp_pub;
+	orb_advert_t _vehicle_global_position_pub;
 
 	// topic structures, in this structures the data of the topics are stored
 	struct trajectory_setpoint_s	        _v_traj_sp;			// vehicle attitude setpoint
 	struct debug_vect_s	        _position_sp;			// To show the setpoint in QGroundControl
+	struct vehicle_global_position_s _vehicle_global_position;
     struct vehicle_local_position_s v_pos;	            // attitude data
 	// performance counters
 	perf_counter_t	_loop_perf;
@@ -214,9 +217,11 @@ HippocampusTrajectoryPlanner::HippocampusTrajectoryPlanner(char *type_traj) :
 	_params_sub(-1),
     _v_pos_sub(-1),
 
+
 	// publications
 	_v_traj_sp_pub(nullptr),
     _position_sp_pub(nullptr),
+    _vehicle_global_position_pub(nullptr),
 
 	// performance counters
 	_loop_perf(perf_alloc(PC_ELAPSED, "path_controller")),
@@ -396,12 +401,19 @@ void HippocampusTrajectoryPlanner::point()
 	_v_traj_sp.roll = 0.0f;                  // no roll angle
 	_v_traj_sp.droll = 0.0f;
 
+
     _position_sp.x = _v_traj_sp.x;
     _position_sp.y = _v_traj_sp.y;
+    strcpy(_position_sp.name, "DEBUG_VECT");
 
+
+   // _position_sp.name = (char)name;
 	// publish setpoint data
 	orb_publish(ORB_ID(trajectory_setpoint), _v_traj_sp_pub, &_v_traj_sp);
 	orb_publish(ORB_ID(debug_vect), _position_sp_pub, &_position_sp);
+   _vehicle_global_position.vel_n=_v_traj_sp.x;
+   _vehicle_global_position.vel_e=_v_traj_sp.y;
+	orb_publish(ORB_ID(vehicle_global_position), _vehicle_global_position_pub, &_vehicle_global_position);
 
 /*
     print_counter = print_counter+1;
@@ -431,12 +443,16 @@ void HippocampusTrajectoryPlanner::ellipse()
  //float x_set_point1[11] = {0.6500, 0.8247, 1.2876, 1.8772, 2.3874, 2.6400, 2.5468, 2.1403, 1.5625, 1.0153, 0.6898};
  //float y_set_point1[11] = {0.8200, 0.5941, 0.4472, 0.4305, 0.5498, 0.7636, 0.9970, 1.1686, 1.2185, 1.1291, 0.9318};
 
-   float x_set_point1[11] = {0.85, 0.99, 1.36, 1.83, 2.24, 2.44, 2.37, 2.04, 1.58, 1.14, 0.88};
-   float y_set_point1[11] = {0.82, 0.68, 0.59, 0.58, 0.65, 0.78, 0.93, 1.04, 1.07, 1.01, 0.89};
+   float x_set_point2[11] = {0.85, 0.99, 1.36, 1.83, 2.24, 2.44, 2.37, 2.04, 1.58, 1.14, 0.88};
+   float y_set_point2[11] = {0.82, 0.68, 0.59, 0.58, 0.65, 0.78, 0.93, 1.04, 1.07, 1.01, 0.89};
+   float x_set_point1[4] = {1, 2.2, 2.2, 1};
+   float y_set_point1[4] = {0.65, 0.65, 1.25, 1.25};
 
+  // float x_set_point2[4] = {0.8, 1.5, 2.2, 1.5 };
+  // float y_set_point2[4] = {0.83, 0.58, 1.08, 0.83};
 
-   float x_set_point2[4] = {0.8, 1.5, 2.2, 1.5 };
-   float y_set_point2[4] = {0.83, 0.58, 1.08, 0.83};
+   //float x_set_point2[4] = {1, 2.2, 2.2, 1};
+   //float y_set_point2[4] = {0.65, 1.25, 0.65, 1.25};
 
    //float e_x = x_set_point[setpoint_counter]-v_pos.x;
    //float e_y = y_set_point[setpoint_counter]-v_pos.y;
@@ -449,25 +465,25 @@ void HippocampusTrajectoryPlanner::ellipse()
    //set the right setpoint list and counter limits
        if (_params.wp_shape == 0){
 
-       for (int i = 0; i<11; i = i+1){
+       for (int i = 0; i<4; i = i+1){
             x_set_point[i] = x_set_point1[i];
             y_set_point[i] = y_set_point1[i];
                         }
-        counter_limit = 11;
+        counter_limit = 4;
 
        }else {
-           for (int i = 0; i<4; i = i+1){
+           for (int i = 0; i<11; i = i+1){
                 x_set_point[i] = x_set_point2[i];
                 y_set_point[i] = y_set_point2[i];
             }
-        counter_limit = 4;
+        counter_limit = 11;
         }
 
     // allocate position
     _v_traj_sp.x = x_set_point[setpoint_counter];         // x
     _v_traj_sp.y = y_set_point[setpoint_counter];         // y
-    _v_traj_sp.z = 0;         // z
-
+    //_v_traj_sp.z = 0;         // z
+    _v_traj_sp.z = v_pos.z;
     //error
     e_x = x_set_point[setpoint_counter]-v_pos.x;
     e_y = y_set_point[setpoint_counter]-v_pos.y;
@@ -504,13 +520,20 @@ void HippocampusTrajectoryPlanner::ellipse()
 	_v_traj_sp.roll = 0.0f;                  // no roll angle
 	_v_traj_sp.droll = 0.0f;
 
+    strcpy(_position_sp.name, "DEBUG_VECT");
+   // char name[10];
+   // name = "debug_vec"
     _position_sp.x = _v_traj_sp.x;
     _position_sp.y = _v_traj_sp.y;
+   // _position_sp.name = name;
 
 	// publish setpoint data
 	orb_publish(ORB_ID(trajectory_setpoint), _v_traj_sp_pub, &_v_traj_sp);
 	orb_publish(ORB_ID(debug_vect), _position_sp_pub, &_position_sp);
 
+   _vehicle_global_position.vel_n=_v_traj_sp.x;
+   _vehicle_global_position.vel_e=_v_traj_sp.y;
+	orb_publish(ORB_ID(vehicle_global_position), _vehicle_global_position_pub, &_vehicle_global_position);
 
     print_counter = print_counter+1;
 
@@ -527,6 +550,13 @@ void HippocampusTrajectoryPlanner::ellipse()
 // This function gives back a circle
 void HippocampusTrajectoryPlanner::circle()
 {
+
+    bool updated;
+    orb_check(_vehicle_local_position, &updated);
+        if (updated) {
+                      // get local position
+                    orb_copy(ORB_ID(vehicle_local_position), _vehicle_local_position, &v_pos);
+                       }
 	// trajectory
 	float T_round = _params.circle_t;           // time required for one round of the circle
 
@@ -552,7 +582,7 @@ void HippocampusTrajectoryPlanner::circle()
 	_v_traj_sp.x = _params.circle_x + r * sinus;               // x
 	_v_traj_sp.y = _params.circle_y - cosinus * r;         // y
 
-	_v_traj_sp.z = 0.0f;                    // z
+	_v_traj_sp.z = v_pos.z;                    // z
 
 	_v_traj_sp.dx = ratio * cosinus * r;    // dx/dt
 	_v_traj_sp.dy = ratio * sinus * r;      // dy/dt
@@ -575,7 +605,9 @@ void HippocampusTrajectoryPlanner::circle()
 	// publish setpoint data
 	orb_publish(ORB_ID(trajectory_setpoint), _v_traj_sp_pub, &_v_traj_sp);
 	orb_publish(ORB_ID(debug_vect), _position_sp_pub, &_position_sp);
-
+    _vehicle_global_position.vel_n=_v_traj_sp.x;
+   _vehicle_global_position.vel_e=_v_traj_sp.y;
+	orb_publish(ORB_ID(vehicle_global_position), _vehicle_global_position_pub, &_vehicle_global_position);
 }
 
 // This function gives back a down spiral
@@ -755,6 +787,7 @@ void HippocampusTrajectoryPlanner::task_main()
 	// publisher
 	_v_traj_sp_pub = orb_advertise(ORB_ID(trajectory_setpoint), &_v_traj_sp);
 	_position_sp_pub = orb_advertise(ORB_ID(debug_vect), &_position_sp);
+	_vehicle_global_position_pub = orb_advertise(ORB_ID(vehicle_global_position), &_vehicle_global_position);
 
 	// initialize parameters cache
 	parameters_update();

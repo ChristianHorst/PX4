@@ -312,7 +312,27 @@ void Read_EKF_Data::ekf_update_poll()
 
         orb_copy(ORB_ID(ekf_vector), subscribed_ekf_vector_int, &subscribed_ekf_vector);
 
+        /*
+        //Debug options
+        PX4_INFO("Debug_Test:\t%.4f\t%.4f\n",
+                       (double)subscribed_ekf_vector.EKF_pos_x,
+                       (double)subscribed_ekf_vector.EKF_pos_y);
+        */
+        /*
+        FILE *sd;
+         if (sd_save ==0 ){
+            sd = fopen("/fs/microsd/Position_Data.txt","w");
+            fprintf(sd,"Mocap_Pos_Trans and EKF_Pos_Ant and rotation_vec:\n");
+            fclose(sd);
+            sd_save =1;
+            }
 
+            sd = fopen("/fs/microsd/Position_Data.txt","a");
+            fprintf(sd,"\t%.4f\t%.4f\n",
+            (double)subscribed_ekf_vector.EKF_pos_x,
+            (double)subscribed_ekf_vector.EKF_pos_y);
+            fclose(sd);
+        */
         /* Print the updatet absolut position and ekf covariance*/
 
                                 n=n+1;
@@ -329,9 +349,7 @@ void Read_EKF_Data::ekf_update_poll()
         _mocap_vec.x = subscribed_ekf_vector.EKF_pos_x/1000;
         _mocap_vec.y = subscribed_ekf_vector.EKF_pos_y/1000;
 
-        /*With rotation to NED coordinates*/
-        //_mocap_vec.x = subscribed_ekf_vector.EKF_pos_x/1000*cosf(_params.alpha*M_PI/180)-subscribed_ekf_vector.EKF_pos_y/1000*sinf(_params.alpha*M_PI/180);
-        //_mocap_vec.y = subscribed_ekf_vector.EKF_pos_x/1000*sinf(_params.alpha*M_PI/180)+subscribed_ekf_vector.EKF_pos_y/1000*cosf(_params.alpha*M_PI/180);
+        /*With rotation from antenna to bodycenter coordinates*/
 
         if (_params.trans == 1){
             _mocap_vec.x = _mocap_vec.x + x_B(0)*_dist_antenna;
@@ -362,52 +380,8 @@ void Read_EKF_Data::ekf_update_poll()
         _mocap_vec.z = water_depth;
 
 
+    //save to sd-card
 /*
-        //Print vehicle_local_position
-        orb_check(_vehicle_local_position, &updated);
-        if (updated) {
-                    struct vehicle_local_position_s v_pos;
-
-                    // get pressure value from sensor
-                    orb_copy(ORB_ID(vehicle_local_position), _vehicle_local_position, &v_pos);
-
-                    k=k+1;
-                    if (k > 200) {
-                                PX4_INFO("local_position:\t%.4f\t%.4f\t%.4f",
-                                                   (double)v_pos.x,
-                                                   (double)v_pos.y,
-                                                   (double)v_pos.z);
-                                                    k=1;
-                                }
-
-                       }
- */
-
-/*
-        //Print vehicle_local_position
-        orb_check(_vehicle_attitude, &updated);
-        if (updated) {
-                    struct vehicle_attitude_s v_att;
-
-                    //get pressure value from sensor
-                    orb_copy(ORB_ID(vehicle_attitude), _vehicle_attitude, &v_att);
-
-                   l=l+1;
-                    if (l > 100) {
-                                PX4_INFO("Attitude:\t%.4f\t%.4f\t%.4f\t%.4f",
-                                                   (double)v_att.q[0],
-                                                   (double)v_att.q[1],
-                                                   (double)v_att.q[2],
-                                                   (double)v_att.q[3]);
-                                                    l=1;
-                                }
-            }
-*/
-
-
-//        struct vehicle_local_position_s v_pos_print;
-//        orb_copy(ORB_ID(vehicle_local_position), _vehicle_local_position, &v_pos_print);
- /*
         FILE *sd;
          if (sd_save ==0 ){
             sd = fopen("/fs/microsd/Position_Data.txt","w");
@@ -417,14 +391,11 @@ void Read_EKF_Data::ekf_update_poll()
             }
 
             sd = fopen("/fs/microsd/Position_Data.txt","a");
-            fprintf(sd,"\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n",
+            fprintf(sd,"\t%.4f\t%.4f\t%.4f\t%.4f\n",
             (double)_mocap_vec.x,
             (double)_mocap_vec.y,
             (double)subscribed_ekf_vector.EKF_pos_x,
-            (double)subscribed_ekf_vector.EKF_pos_y,
-            (double)x_B(0),
-            (double)x_B(1),
-            (double)x_B(2));
+            (double)subscribed_ekf_vector.EKF_pos_y);
             fclose(sd);
 */
 

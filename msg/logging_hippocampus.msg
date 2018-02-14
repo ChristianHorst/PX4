@@ -20,4 +20,13 @@ float32 xvc		# flow velocity x-direction in meters/s NED
 float32 yvc		# flow velocity y-direction in meters/s NED
 float32 zvc		# flow velocity z-direction in meters/s NED
 
+float32[3] e_r	# rotation error roll
+
+float32 yaw		# yaw in rad NED
+float32[3] e_p	# position error
+float32[3] e_v	# velocity error
+float32[3] e_w	# angular velocity error
+float32[4] u_in	# actuator input
+float32[4] u_out	# actuator input
+
 float32 t       # time
