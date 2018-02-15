@@ -22,11 +22,15 @@ float32 zvc		# flow velocity z-direction in meters/s NED
 
 float32[3] e_r	# rotation error roll
 
-float32 yaw		# yaw in rad NED
+float32[3] angle	# roll/pitch/yaw in rad NED
 float32[3] e_p	# position error
 float32[3] e_v	# velocity error
 float32[3] e_w	# angular velocity error
 float32[4] u_in	# actuator input
 float32[4] u_out	# actuator input
+float32[6] pitch_out	# pitch_control output
+float32[2] roll_out	# roll_control output
+float32[2] yaw_out	# yaw_control output
+float32[2] thrust_out	# thrust_control output
 
 float32 t       # time

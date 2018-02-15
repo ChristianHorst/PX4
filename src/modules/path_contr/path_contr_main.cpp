@@ -73,6 +73,7 @@
 #include <uORB/topics/trajectory_setpoint.h>
 #include <uORB/topics/parameter_update.h>
 #include <uORB/topics/logging_hippocampus.h>            // logging message to have everything in one at the same time steps
+#include <uORB/topics/pressure.h>
 // system libraries
 #include <systemlib/param/param.h>
 #include <systemlib/err.h>
@@ -84,6 +85,7 @@
 #include <lib/geo/geo.h>
 #include <lib/tailsitter_recovery/tailsitter_recovery.h>
 #include <uORB/topics/debug_value.h>
+#include <uORB/topics/debug_vect.h>
 #include <uORB/topics/sensor_combined.h>
 
 
@@ -115,6 +117,7 @@ private:
 	int		_params_sub;			// parameter updates subscription
 	int		_v_traj_sp_sub;			// trajectory setpoint subscription
     int		_debug_value_sub;		 // debug_value
+    int		_debug_vect_sub;		 // debug_value
     int     _actuator_outputs_sub;
 	int     sd_save;
 	int     yaw_drift_compensation_init;
@@ -124,7 +127,8 @@ private:
 	orb_advert_t	_actuators_0_pub;		    // attitude actuator controls publication
 	orb_advert_t    _logging_hippocampus_pub;   // logging data publisher
 	orb_id_t        _actuators_id;	            // pointer to correct actuator controls0 uORB metadata structure
-	orb_advert_t	_debug_value_pub;		    // attitude actuator controls publication
+	orb_advert_t	_debug_value_pub;
+	orb_advert_t	_debug_vect_pub;		    // attitude actuator controls publication
     //orb_advert_t        _sensors_sub;
 
 	// topic structures, in this structures the data of the topics are stored
@@ -133,9 +137,11 @@ private:
 	struct vehicle_attitude_s		    _v_att;		            // attitude data
 	struct vehicle_local_position_s		_v_pos;		            // attitude data
 	struct trajectory_setpoint_s	    _v_traj_sp;			    // trajectory setpoint
+	struct debug_vect_s	            _debug_vect;
 	struct debug_value_s	            _debug_value;			    // debug value
 	struct sensor_combined_s	        sensors;			    // sensors
 	struct actuator_outputs_s            _actuator_output;
+	struct pressure_s                   _press;
 	// performance counters
 	perf_counter_t	_loop_perf;
 	perf_counter_t	_controller_latency_perf;
@@ -145,7 +151,7 @@ private:
 	math::Vector<3>     _position_1;        // previous position
 	math::Vector<3>     _position_2;
 	math::Vector<3>     _position_3;
-
+    math::Vector<3>    _omega;
 	// time
 	float               t_ges;
 	float               counter;
@@ -153,6 +159,44 @@ private:
 	float               yaw_compensated;
     float               yaw_drift_compensation;
     float               pi;
+
+    	    /* Parameters for pressure sensor */
+    int         _pressure_raw;          /**< pressure sensor subscription */
+    float       _depth;                 /**< measured depth in m */
+    int         _counter;               /**< Counter for saving _p_zero */
+    float       _p_zero;
+    float       _roh_g;
+    float       _pressure_new;
+    float       _pressure_time_old;
+    float       _pressure_time_new;
+    float       _iterationtime;    /**< Time per Iteration */
+        /**< SLIDING-MODE-OBSERVER (SMO) */
+        float _xhat1;            /**< Estimated depth in m */
+        float _xhat2;            /**< Estimated velocity in m/s */
+        float _xhat1_prev;       /**< Estimated depth at previous time step in m */
+        float _xhat2_prev;       /**< Estimated velocity at previous time step in m/s */
+        float _depth_smo;  /**< Outcome water depth SMO in m */
+    float       _depth_err;              /**< Error actual water depth and desired water depth */
+    float       _depth_p;
+    float       _depth_i;
+    float       _depth_i_old;
+    float       _depth_d;
+    float       _depth_pid;
+
+    /* Parameters for Attitude Controller */
+        float       _roll_angle;
+        float       _roll_err;
+        float       _roll_p;
+        float       _roll_d;
+        float       _roll_pd;
+
+        float       _pitch_angle;
+        float       _pitch_err;
+        float       _pitch_p;
+        float       _pitch_d;
+        float       _yaw_pd;
+        float       _yaw_p;
+        float       _yaw_d;
 
     // controller type
 	char type_array[100];
@@ -183,12 +227,43 @@ private:
 		param_t K_M;
 		param_t L;
 		param_t OG_THRUST;
-		param_t OG_ANGLE;
+		param_t OG_YAW;
+		param_t OG_PITCH;
+		param_t OG_ROLL;
+		param_t PI_RO_ONLY;
 		param_t ROLL;
 		param_t PITCH;
 		param_t YAW;
 		param_t SCALE;
 		param_t MIX;
+		param_t WS_CONTROL;
+		param_t NO_BACK;
+
+		 param_t depth_sp;
+         param_t depth_p_gain;
+         param_t depth_i_gain;
+         param_t depth_d_gain;
+
+         // SMO: Model parameters
+         param_t rho; // Observer parameter
+         param_t tau; // Observer parameter
+         param_t phi; // Observer parameter
+
+         //Attitude Controller
+         param_t roll_gain;
+         param_t pitch_gain;
+         param_t yaw_gain;
+         param_t roll_rate_gain;
+         param_t pitch_rate_gain;
+         param_t yaw_rate_gain;
+         param_t thrust_sp;
+         param_t yaw_rate_sp;
+
+         param_t roll_sp;
+         param_t pitch_sp;
+
+         param_t weight_pitch;
+         param_t weight_depth;
 	}		_params_handles;		// handles for to find parameters
 
 	struct {
@@ -207,12 +282,42 @@ private:
 		// Lifting arm
 		float L;
 		float OG_thrust;                       // operating grade
-		float OG_angle;                       // operating grade
+		float OG_yaw;                       // operating grade
+		float OG_pitch;                       // operating grade
+		float OG_roll;                       // operating grade
 		float roll;
 		float pitch;
 		float yaw;
 		int scale;
 		int mix;
+		int pi_ro_only;                       // set pitch and roll only
+		int WS_control;                       // set pitch and roll only
+        int no_back;
+		 float depth_sp;      /**> Desired depth */
+         float depth_p_gain;
+         float depth_i_gain;
+         float depth_d_gain;
+
+         //SLIDING-MODE-OBSERVER (SMO)
+         float rho;
+         float tau;
+         float phi;
+
+                  //Attitude Controller
+         float roll_gain;
+         float pitch_gain;
+         float yaw_gain;
+         float roll_rate_gain;
+         float pitch_rate_gain;
+         float yaw_rate_gain;
+         float thrust_sp;
+         float yaw_rate_sp;
+
+         float roll_sp;
+         float pitch_sp;
+
+         float weight_pitch;
+         float weight_depth;
 	}		_params;
 
 	// actualizes position data
@@ -245,6 +350,13 @@ private:
 
 	// Main attitude control task.
 	void		task_main();
+
+	float get_xhat2(float x1, float iterationtime);
+
+    float get_xhat1(float x1, float iterationtime);
+
+    // sat functio
+    float sat(float x, float gamma);
 };
 
 
@@ -266,6 +378,7 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
 	_params_sub(-1),
 	_v_traj_sp_sub(-1),
 	_debug_value_sub(-1),
+	_debug_vect_sub(-1),
 	_actuator_outputs_sub(-1),
 	//_sensors_sub(-1),
 
@@ -274,6 +387,7 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
 	_logging_hippocampus_pub(nullptr),
 	_actuators_id(nullptr),
 	_debug_value_pub(nullptr),
+	_debug_vect_pub(nullptr),
 
 
 	// performance counters
@@ -300,10 +414,15 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
 	_params.D.zero();
 	_params.L = 0.0f;
 	_params.OG_thrust = 0.0f;
-	_params.OG_angle = 0.0f;
+	_params.OG_yaw = 0.0f;
+	_params.OG_pitch = 0.0f;
+	_params.OG_roll = 0.0f;
+	_params.pi_ro_only = 0;
 	_params.roll = 0.0f;
 	_params.pitch = 0.0f;
 	_params.yaw = 0.0f;
+	_params.WS_control = 0.0f;
+	_params.no_back = 0.0f;
 	sd_save = 0;
 
 	// set initial values of vectors to zero
@@ -318,6 +437,21 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
     yaw_drift_compensation = 0.0f;
     pi = M_PI;
     yaw_drift_compensation_init = 0;
+
+    	/* Pressure Sensor */
+    _depth = 0;
+    _depth_i_old = 0;
+    _roh_g = 98.1;
+    _counter = 1;
+    _p_zero = 0.0;
+    _pressure_new = 0;
+    _pressure_time_old = 0;
+    _pressure_time_new = 0;
+    _iterationtime = 0;
+    _xhat1 = 0.0; //Estimated depth in m
+    _xhat2 = 0.0; //Estimated velocity in m/s
+    _xhat1_prev = 0; //Estimated depth at previous time step in m
+    _xhat2_prev = 0; //Estimated velocity at previous time step in m/s
 
 	// allocate controller type
 	strcpy(&type_array[0], type_ctrl);
@@ -359,13 +493,41 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
 	_params_handles.K_M		        = 	param_find("PC_K_M");
 	_params_handles.L	            = 	param_find("PC_L");
 	_params_handles.OG_THRUST	    = 	param_find("PC_OG_THRUST");
-    _params_handles.OG_ANGLE	    = 	param_find("PC_OG_ANGLE");
+    _params_handles.OG_YAW	        = 	param_find("PC_OG_YAW");
+    _params_handles.OG_PITCH	    = 	param_find("PC_OG_PITCH");
+    _params_handles.OG_ROLL	        = 	param_find("PC_OG_ROLL");
 	_params_handles.ROLL	        = 	param_find("PC_ROLL");
 	_params_handles.PITCH	        = 	param_find("PC_PITCH");
 	_params_handles.YAW	            = 	param_find("PC_YAW");
-    _params_handles.SCALE	            = 	param_find("PC_SCALE");
+    _params_handles.SCALE	        = 	param_find("PC_SCALE");
     _params_handles.MIX	            = 	param_find("PC_MIX");
+    _params_handles.PI_RO_ONLY	    = 	param_find("PC_PI_RO_ONLY");
+    _params_handles.WS_CONTROL	    = 	param_find("PC_WS_CONTROL");
+    _params_handles.NO_BACK	    = 	param_find("PC_NO_BACK");
 
+
+
+    _params_handles.depth_sp        =   param_find("PC_DEPTH");
+    _params_handles.depth_p_gain    =   param_find("PC_DEPTH_P");
+    _params_handles.depth_i_gain    =   param_find("PC_DEPTH_I");
+    _params_handles.depth_d_gain    =   param_find("PC_DEPTH_D");
+    _params_handles.rho             =   param_find("PC_RHO");
+    _params_handles.tau             =   param_find("PC_TAU");
+    _params_handles.phi             =   param_find("PC_PHI");
+
+       _params_handles.roll_gain       =   param_find("PC_ROLL_GAIN");
+    _params_handles.pitch_gain      =   param_find("PC_PITCH_GAIN");
+    _params_handles.yaw_gain        =   param_find("PC_YAW_GAIN");
+    _params_handles.roll_rate_gain  =   param_find("PC_ROLL_RATE_G");
+    _params_handles.yaw_rate_gain  =   param_find("PC_YAW_RATE_G");
+    _params_handles.pitch_rate_gain =   param_find("PC_PITCH_RATE_G");
+    _params_handles.thrust_sp       =   param_find("PC_THRUST_SP");
+    _params_handles.yaw_rate_sp     =   param_find("PC_YAW_RATE_SP");
+    _params_handles.roll_sp         =   param_find("PC_ROLL_SP_DEG");
+    _params_handles.pitch_sp         =   param_find("PC_PITCH_SP_DEG");
+
+    _params_handles.weight_pitch    =   param_find("PC_WEIGHT_PITCH");
+    _params_handles.weight_depth    =   param_find("PC_WEIGHT_DEPTH");
 	// fetch initial parameter values
 	parameters_update();
 }
@@ -446,8 +608,14 @@ int HippocampusPathControl::parameters_update()
 	_params.L = v;
     param_get(_params_handles.OG_THRUST, &v);
 	_params.OG_thrust = v;
-	param_get(_params_handles.OG_ANGLE, &v);
-	_params.OG_angle = v;
+	param_get(_params_handles.OG_YAW, &v);
+	_params.OG_yaw = v;
+	param_get(_params_handles.OG_PITCH, &v);
+	_params.OG_pitch = v;
+	param_get(_params_handles.OG_ROLL, &v);
+	_params.OG_roll = v;
+	param_get(_params_handles.PI_RO_ONLY, &v);
+	_params.pi_ro_only = v;
 	param_get(_params_handles.ROLL, &v);
 	_params.roll = v;
 	param_get(_params_handles.PITCH, &v);
@@ -458,6 +626,32 @@ int HippocampusPathControl::parameters_update()
 	_params.scale = v;
 	param_get(_params_handles.MIX, &v);
 	_params.mix = v;
+	param_get(_params_handles.WS_CONTROL, &v);
+	_params.WS_control = v;
+	param_get(_params_handles.NO_BACK, &v);
+	_params.no_back = v;
+
+	   param_get(_params_handles.depth_sp, &(_params.depth_sp));
+    param_get(_params_handles.depth_p_gain, &(_params.depth_p_gain));
+    param_get(_params_handles.depth_i_gain, &(_params.depth_i_gain));
+    param_get(_params_handles.depth_d_gain, &(_params.depth_d_gain));
+    param_get(_params_handles.rho, &(_params.rho));
+    param_get(_params_handles.tau, &(_params.tau));
+    param_get(_params_handles.phi, &(_params.phi));
+    param_get(_params_handles.roll_gain, &(_params.roll_gain));
+    param_get(_params_handles.yaw_gain, &(_params.yaw_gain));
+    param_get(_params_handles.pitch_gain, &(_params.pitch_gain));
+    param_get(_params_handles.yaw_gain, &(_params.yaw_gain));
+    param_get(_params_handles.roll_rate_gain, &(_params.roll_rate_gain));
+    param_get(_params_handles.yaw_rate_gain, &(_params.yaw_rate_gain));
+    param_get(_params_handles.pitch_rate_gain, &(_params.pitch_rate_gain));
+    param_get(_params_handles.yaw_rate_gain, &(_params.yaw_rate_gain));
+    param_get(_params_handles.thrust_sp, &(_params.thrust_sp));
+    param_get(_params_handles.yaw_rate_sp, &(_params.yaw_rate_sp));
+    param_get(_params_handles.roll_sp, &(_params.roll_sp));
+    param_get(_params_handles.pitch_sp, &(_params.pitch_sp));
+    param_get(_params_handles.weight_pitch, &(_params.weight_pitch));
+    param_get(_params_handles.weight_depth, &(_params.weight_depth));
 
 	return OK;
 }
@@ -533,6 +727,31 @@ void HippocampusPathControl::trajectory_setpoint_poll()
 	}
 }
 
+float HippocampusPathControl::get_xhat2(float x1, float time) {
+
+    _xhat1 = get_xhat1(x1, time);
+
+   // xhat2 = xhat2_prev + (iterationtime / (0.1 * tau))* (-xhat2_prev - rho * sat(xhat1 - x1,1));
+    _xhat2 = _xhat2_prev + (time / _params.tau) * (-_xhat2_prev - _params.rho * sat(_xhat1 - x1,_params.phi));
+
+    _xhat2_prev = _xhat2;
+    return _xhat2; //xhat2 = geschätzte Geschwindigkeit
+}
+
+
+float HippocampusPathControl::get_xhat1(float x1, float time) {
+    //xhat1 = xhat1_prev - (iterationtime / 0.1) * rho * sat(xhat1_prev - x1, 1);
+    _xhat1 = _xhat1_prev - (time / 1) * _params.rho * sat(_xhat1_prev - x1, _params.phi);
+    _xhat1_prev = _xhat1; //xhat1 = geschätzte Tiefe
+    return _xhat1;
+}
+
+// sat functio
+float HippocampusPathControl::sat(float x, float gamma) {
+    float y = math::max(math::min(1.0f, x / gamma), -1.0f);
+    return y;
+}
+
 
 
 // Gives back orientation error between R and R_des
@@ -605,6 +824,8 @@ math::Vector<3> HippocampusPathControl::flowField(math::Vector<3> pos)
  */
 void HippocampusPathControl::path_control(float dt)
 {
+
+
 
     // actualize setpoint data
 	trajectory_setpoint_poll();
@@ -780,75 +1001,166 @@ void HippocampusPathControl::path_control(float dt)
 
 	}else if (!strcmp(type_array, "WS")) {
 
-	    e_p = r - r_T;                      // calculate position error
-	    e_v = rd - rd_T;                    // calculate velocity error
+	    //YAW_Control
+        float e_r_1;
+        //float e_r_2;
+	    float psi_des = atan2f(r_T(1)-r(1),r_T(0)-r(0));
+	    //e_r(2) = psi_des-euler.psi();
 
+        e_r_1 = psi_des-euler.psi();
+        /*e_r_2 = euler.psi()-psi_des;
+
+          if (abs(e_r_1) > abs(e_r_2)){
+	    e_r(2) = e_r_2;
+	    }   else{
+	    e_r(2) = e_r_1;
+	    }
+        */
+        if(e_r_1>3.1416f){
+            e_r(2) = e_r_1-3.1416f*2.0f;
+            }else if(e_r_1<-3.1416f){
+            e_r(2)=e_r_1+3.1416f*2.0f;
+            }else{
+            e_r(2) = e_r_1;
+            }
+	   // if (e_r(2) > 4.0f){
+	   // e_r(2) = e_r(2) - 2.0f * pi;
+	   // }   else if (e_r(2) < -4.0f){
+	   // e_r(2) = e_r(2) + 2.0f* pi;
+	   // }
+
+	    float yaw_des = 0.0f;
+        e_w (2) = _v_att.yawspeed - yaw_des ;
+
+
+            /* Calculate P-term of PD-Controller (Roll) */
+            _yaw_p = e_r(2) * _params.yaw_gain;
+
+            /* Calculate D-term of PD-Controller (Roll) */
+            _yaw_d = e_w (2) * _params.yaw_rate_gain;
+
+            /* Calculate PD-Controller */
+            _yaw_pd = _yaw_p + _yaw_d;
+
+
+        //TOBIS PITCH CONTROL
+   //matrix::Eulerf euler = matrix::Quatf(_v_att.q);
+
+        /* get current rates from sensors */
+            _omega(0) = _v_att.rollspeed;
+            _omega(1) = _v_att.pitchspeed;
+            _omega(2) = _v_att.yawspeed;
+
+        /** get pressure value from sensor*/
+            orb_copy(ORB_ID(pressure), _pressure_raw, &_press);
+            //orb_copy(ORB_ID(actuator_outputs), _actuator_output, &_act_out);
+
+            /* set surface air pressure  */
+            if (_counter == 1){
+                _p_zero = 1;
+                _p_zero = _press.pressure_mbar;
+                _counter = 0;
+            }
+
+            /* set actual pressure from the sensor and absolute time to a new controler value */
+            _pressure_new = _press.pressure_mbar;
+            //_pressure_new = 1;
+            _pressure_time_new = hrt_absolute_time();
+
+            /* calculate actual water depth */
+            _depth = ( _pressure_new - _p_zero ) / ( _roh_g ); //unit meter
+
+
+        /**< PID-Controller for Pitch */
+
+            /* Calculate measured pitch angle in degree */
+            _pitch_angle = euler.theta() * (180.0f/3.1416f);
+
+            /* Calculate pitch error */
+            _pitch_err = _params.pitch_sp - _pitch_angle;
+
+            /* Calculate P-term of PD-Controller (Pitch) */
+            _pitch_p = _pitch_err * _params.pitch_gain;
+
+            /* Calculate D-term of PD-Controller (Pitch) */
+            _pitch_d = _omega(1) * _params.pitch_rate_gain;
+
+
+            /* calculate iterationtime for Sliding Mode Observer */
+            _iterationtime = _pressure_time_new - _pressure_time_old;
+            /* scale interationtime*/
+            _iterationtime = _iterationtime * 0.0000015f;
+
+            /* calculate d-component of the controler by using a Sliding Mode Observer for accounting possible future trends of the error */
+            _depth_smo = get_xhat1(_depth,_iterationtime);
+
+            /* set actual pressure from the sensor and absolute time to a "old" controler value */
+            _pressure_time_old = _pressure_time_new;
+
+            /* calculate the depth error */
+            _depth_err = _depth - _params.depth_sp;
+
+            /* P-term of PID-controller */
+            _depth_p = _params.depth_p_gain * _depth_err;
+
+            /* I-term of PID-controller */
+            _depth_i = _depth_i_old + (_depth_err * _iterationtime);
+            _depth_i_old = _depth_i;
+
+            /* PID-Controller */
+            _depth_pid = _params.weight_depth * (_depth_p + _params.depth_i_gain * _depth_i + _params.depth_d_gain * _depth_smo) + _params.weight_pitch * (_pitch_p + _pitch_d);
+
+            _debug_vect.x = _depth_p;
+            _debug_vect.y = _pitch_p;
+            _debug_vect.z = _depth_pid;
+            strcpy(_debug_vect.name, "DEBUG_VECT");
+
+            _debug_value.value =_depth ;
+            _debug_value.ind = 1;
+
+        /**< Attitude Controller: Roll */
+
+            /* Calculate measured roll angle in degree */
+            _roll_angle = euler.phi() * (180.0f/3.1416f);
+
+            /* Calculate roll error */
+            _roll_err = _params.roll_sp - _roll_angle;
+
+            /* Calculate P-term of PD-Controller (Roll) */
+            _roll_p = _roll_err * _params.roll_gain;
+
+            /* Calculate D-term of PD-Controller (Roll) */
+            _roll_d = _omega(0) * _params.roll_rate_gain;
+
+            /* Calculate PD-Controller */
+            _roll_pd = _roll_p + _roll_d;
+                //Scale
+                //_roll_pd = _roll_pd * 0.01f;
+
+        //TRHUST CONTROL
+        e_p = r - r_T;                      // calculate position error
+	    e_v = rd - rd_T;                    // calculate velocity error
+        e_p(2) = _depth_err;
+        e_v(2) = _depth_smo;
         // calculate desired force
 
 	    F_des = - _params.K_p * e_p - _params.K_v * e_v + rdd_T * _params.m + M_A_W * rdd_T;
-        F_des(2) = 0;                                       // for only movement in x-y plane
+        //F_des(2) = 0;                                       // for only movement in x-y plane
+
 	    u_1 = F_des * x_B;
 
 
-
-        if (yaw_drift_compensation_init == 0){
-        yaw_drift_compensation_init =1;
-              if (euler.psi() > 0.0f){
-                    yaw_drift_compensation = euler.psi()/pi*180.0f;
-              }else if (euler.psi() < 0.0f){
-                    yaw_drift_compensation = 360.0f+(euler.psi()/pi*180.0f);
-                    }
+        if (_params.no_back == 1){
+            if (u_1<0.0f){
+            u_1 = 0.0f;
+            }
         }
 
-
-/*
-        if (yaw_counter < t_ges){
-        //yaw_counter = yaw_counter + 0.23f; // statt 0.23 gyro_z und statt 1.8 1
-       // yaw_drift_compensation = yaw_drift_compensation + 1.80f/1.0f;
-        yaw_counter = yaw_counter + 0.1f; // statt 0.23 gyro_z und statt 1.8 1
-        yaw_drift_compensation = yaw_drift_compensation + 0.7826f;
-        //yaw_counter = yaw_counter + sensors.gyro_rad[2]; // statt 0.23 gyro_z und statt 1.8 1
-        //yaw_drift_compensation = yaw_drift_compensation + 1.0f;
-            if (yaw_drift_compensation > 360){
-                yaw_drift_compensation = 0.0f;}
-        //PX4_INFO("YAW_DRIFT_COMPENSATION");
-        }
-
-        if (euler.psi() > 0.0f){
-        yaw_compensated = euler.psi()/pi*180.0f - yaw_drift_compensation;
-        }else if (euler.psi() < 0.0f){
-        yaw_compensated = 360.0f+(euler.psi()/pi*180.0f) - yaw_drift_compensation;
-        }
-
-        if (yaw_compensated < 180.0f ){
-        yaw_compensated = yaw_compensated/180.0f*pi;
-        } else if (yaw_compensated > 180.0f){
-        yaw_compensated = yaw_compensated/180.0f * pi - 2.0f *pi;}
-
-*/
-
-	    float psi_des = atan2f(r_T(1)-r(1),r_T(0)-r(0));
-	    e_r(2) = psi_des-euler.psi();
-
-	    if (e_r(2) > 4.0f){
-	    e_r(2) = e_r(2) - 2.0f * pi;
-	    }   else if (e_r(2) < -4.0f){
-	    e_r(2) = e_r(2) + 2.0f* pi;
-	    }
-
-
-	    float yaw_des = 0.0f;
-        e_w (2) = _v_att.yawspeed - yaw_des  ;
-/*
-        if (counter < t_ges) {
-        PX4_INFO("psi_des psi:\t%8.2f\t%8.2f\t%8.2f\t%8.2f\t%8.2f\n",
-			 (double)psi_des,
-			 (double)_v_att.q[0],
-			 (double)_v_att.q[1],
-			 (double)_v_att.q[2],
-			 (double)euler.psi());}
-*/
 	}
+
+
+
+//NILS
 
 	// calculate input over feedback loop
 	u_24 = -_params.K_r * e_r - _params.K_w * e_w;
@@ -916,26 +1228,39 @@ float C_MIX_sim[4][4]= {
   //  if (_v_traj_sp.start == 1) {
 	// give the inputs to the actuators
     if (_params.scale == 1){
-    //Thrust and yaw -control
-            _actuators.control[0] = 0.0f * _params.OG_angle;       // roll
-            _actuators.control[1] = 0.0f * _params.OG_angle;       // pitch
-            _actuators.control[2] = mix_input(2) * _params.OG_angle;           // yaw
-            _actuators.control[3] = mix_input(3) * _params.OG_thrust;           // thrust
 
-           //full control --> uncomment line 653
-            /*
-            _actuators.control[0] = mix_input(0);          // roll
-            _actuators.control[1] = mix_input(1);       // pitch
-            _actuators.control[2] = mix_input(2);           // yaw
-            _actuators.control[3] = mix_input(3);           // thrust
-            */
+    //Thrust and yaw -control
+            _actuators.control[0] = 0 * _params.OG_roll;       // roll
+            _actuators.control[1] = 0 * _params.OG_pitch;       // pitch
+            _actuators.control[2] = mix_input(2) * _params.OG_yaw; // yaw
+            _actuators.control[3] = mix_input(3) * _params.OG_thrust; // thrust
+
 
     } else if ( _params.scale == 0){
       //  u_ges = u_ges * _params.OG;
-            _actuators.control[0] = 0.0f * _params.OG_angle;// mix_input(0);           // roll
-            _actuators.control[1] = 0.0f * _params.OG_angle;//mix_input(1);           // pitch
-            _actuators.control[2] = u_ges(3) * _params.OG_angle;           // yaw
+            _actuators.control[0] = 0.0f * _params.OG_roll;// mix_input(0);           // roll
+            _actuators.control[1] = 0.0f * _params.OG_pitch;//mix_input(1);           // pitch
+            _actuators.control[2] = u_ges(3) * _params.OG_yaw;           // yaw
             _actuators.control[3] = u_ges(0)* _params.OG_thrust;           // thrust
+
+	}
+    //End of Nils Controler
+
+    //Actuator Control for uncoupled Controler
+	if (_params.WS_control ==1){
+	        _actuators.control[0] = _roll_pd * _params.OG_roll;       // roll
+            _actuators.control[1] = _depth_pid  * _params.OG_pitch;   // pitch
+            _actuators.control[2] =  _yaw_pd * _params.OG_yaw;        // yaw
+            _actuators.control[3] = u_1 * _params.OG_thrust;          // thrust
+
+        // Actuautor Control for depth and roll control and const yaw and thrust
+            if(_params.pi_ro_only == 1){
+              _actuators.control[0] = _roll_pd * _params.OG_roll;       // roll
+            _actuators.control[1] = _depth_pid  * _params.OG_pitch;       // pitch
+            _actuators.control[2] = _params.OG_yaw; // yaw
+            _actuators.control[3] = _params.OG_thrust; // thrust
+
+            }
 
 	}
 /*
@@ -969,27 +1294,30 @@ float C_MIX_sim[4][4]= {
 	if (updated) {
 		orb_copy(ORB_ID(actuator_outputs), _actuator_outputs_sub, &_actuator_output);
 	}
-
+     float thrust_p = - _params.K_p * e_p* x_B;
+     float thrust_d = - _params.K_v * e_v* x_B;
 	// store logging data for publishing
 	_logging_hippocampus.x = r(0);
 	_logging_hippocampus.y = r(1);
-	_logging_hippocampus.z = r(2);
+	_logging_hippocampus.z = _depth;
 	_logging_hippocampus.xd = r_T(0);
 	_logging_hippocampus.yd = r_T(1);
-	_logging_hippocampus.zd = r_T(2);
-    _logging_hippocampus.e_r[0] = e_r(0);
-    _logging_hippocampus.e_r[1] = e_r(1);
+	_logging_hippocampus.zd = _params.depth_sp;
+    _logging_hippocampus.e_r[0] = _roll_err;
+    _logging_hippocampus.e_r[1] = _pitch_err;
     _logging_hippocampus.e_r[2] = e_r(2);
-    _logging_hippocampus.yaw = euler.psi();
+    _logging_hippocampus.angle[0] = euler.phi();
+    _logging_hippocampus.angle[1] = euler.theta();
+    _logging_hippocampus.angle[2] = euler.psi();
     _logging_hippocampus.e_p[0] = e_p(0);
     _logging_hippocampus.e_p[1] = e_p(1);
-    _logging_hippocampus.e_p[2] = e_p(2);
+    _logging_hippocampus.e_p[2] = _depth_err;
     _logging_hippocampus.e_v[0] = e_v(0);
     _logging_hippocampus.e_v[1] = e_v(1);
     _logging_hippocampus.e_v[2] = e_v(2);
-    _logging_hippocampus.e_w[0] = e_w(0);
-    _logging_hippocampus.e_w[1] = e_w(1);
-    _logging_hippocampus.e_w[2] = e_w(2);
+    _logging_hippocampus.e_w[0] = _omega(0);
+    _logging_hippocampus.e_w[1] = _omega(1);
+    _logging_hippocampus.e_w[2] = _omega(2);
     _logging_hippocampus.u_in[0] = _actuators.control[0];
     _logging_hippocampus.u_in[1] = _actuators.control[1];
     _logging_hippocampus.u_in[2] = _actuators.control[2];
@@ -998,6 +1326,18 @@ float C_MIX_sim[4][4]= {
     _logging_hippocampus.u_out[1] = _actuator_output.output[1];
     _logging_hippocampus.u_out[2] = _actuator_output.output[2];
     _logging_hippocampus.u_out[3] = _actuator_output.output[3];
+    _logging_hippocampus.pitch_out[0] = _pitch_p;
+    _logging_hippocampus.pitch_out[1] = _pitch_d;
+    _logging_hippocampus.pitch_out[2] = _depth_p;
+    _logging_hippocampus.pitch_out[3] = _params.depth_i_gain * _depth_i;
+    _logging_hippocampus.pitch_out[4] = _params.depth_d_gain * _depth_smo;
+    _logging_hippocampus.pitch_out[5] = _depth_pid ;
+    _logging_hippocampus.roll_out[0] = _roll_p;
+    _logging_hippocampus.roll_out[1] = _roll_d;
+    _logging_hippocampus.yaw_out[0] = _yaw_p;
+    _logging_hippocampus.yaw_out[1] = _yaw_d;
+    _logging_hippocampus.thrust_out[0] = thrust_p;
+    _logging_hippocampus.thrust_out[1] = thrust_d;
 	_logging_hippocampus.t = t_ges;
 
 
@@ -1076,7 +1416,7 @@ float C_MIX_sim[4][4]= {
         }
 
         */
-        _debug_value.value = e_r(2);
+
 
 }
 
@@ -1097,8 +1437,10 @@ void HippocampusPathControl::task_main()
 	_params_sub = orb_subscribe(ORB_ID(parameter_update));
 	_v_traj_sp_sub = orb_subscribe(ORB_ID(trajectory_setpoint));
 	_debug_value_sub = orb_subscribe(ORB_ID(debug_value));
+	_debug_vect_sub = orb_subscribe(ORB_ID(debug_vect));
 	_actuator_outputs_sub = orb_subscribe(ORB_ID(actuator_outputs));
 	int _sensors_sub = orb_subscribe(ORB_ID(sensor_combined));
+	_pressure_raw = orb_subscribe(ORB_ID(pressure));
 
 	// initialize parameters cache
 	parameters_update();
@@ -1169,6 +1511,14 @@ void HippocampusPathControl::task_main()
 
 			} else {
 				_debug_value_pub = orb_advertise(ORB_ID(debug_value), &_debug_value);
+			}
+
+							// publish debug_valueor
+			if (_debug_vect_pub != nullptr) {
+				orb_publish(ORB_ID(debug_vect), _debug_vect_pub, &_debug_vect);
+
+			} else {
+				_debug_vect_pub = orb_advertise(ORB_ID(debug_vect), &_debug_vect);
 			}
 
 
