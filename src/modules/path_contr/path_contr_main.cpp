@@ -1110,10 +1110,7 @@ void HippocampusPathControl::path_control(float dt)
             /* PID-Controller */
             _depth_pid = _params.weight_depth * (_depth_p + _params.depth_i_gain * _depth_i + _params.depth_d_gain * _depth_smo) + _params.weight_pitch * (_pitch_p + _pitch_d);
 
-            _debug_vect.x = _depth_p;
-            _debug_vect.y = _pitch_p;
-            _debug_vect.z = _depth_pid;
-            strcpy(_debug_vect.name, "DEBUG_VECT");
+
 
             _debug_value.value =_depth ;
             _debug_value.ind = 1;
@@ -1155,6 +1152,11 @@ void HippocampusPathControl::path_control(float dt)
             u_1 = 0.0f;
             }
         }
+
+               _debug_vect.x = u_1;
+            _debug_vect.y = _pitch_p;
+            _debug_vect.z = _depth_pid;
+            strcpy(_debug_vect.name, "DEBUG_VECT");
 
 	}
 

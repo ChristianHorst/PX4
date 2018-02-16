@@ -444,18 +444,18 @@ void HippocampusTrajectoryPlanner::ellipse()
  //float x_set_point1[11] = {0.6500, 0.8247, 1.2876, 1.8772, 2.3874, 2.6400, 2.5468, 2.1403, 1.5625, 1.0153, 0.6898};
  //float y_set_point1[11] = {0.8200, 0.5941, 0.4472, 0.4305, 0.5498, 0.7636, 0.9970, 1.1686, 1.2185, 1.1291, 0.9318};
 
- //  float x_set_point2[11] = {0.85, 0.99, 1.36, 1.83, 2.24, 2.44, 2.37, 2.04, 1.58, 1.14, 0.88};
- // float y_set_point2[11] = {0.82, 0.68, 0.59, 0.58, 0.65, 0.78, 0.93, 1.04, 1.07, 1.01, 0.89};
- //  float x_set_point1[4] = {1, 2.2, 2.2, 1};
- //  float y_set_point1[4] = {0.65, 0.65, 1.25, 1.25};
+  float x_set_point2[10] = {0.85, 0.99, 1.36, 1.83, 2.24, 2.44, 2.37, 2.04, 1.58, 1.14};
+  float y_set_point2[10] = {0.82, 0.68, 0.59, 0.58, 0.65, 0.78, 0.93, 1.04, 1.07, 1.01};
+  float x_set_point1[4] = {1, 2.2, 2.2, 1};
+  float y_set_point1[4] = {0.65, 0.65, 1.25, 1.25};
 
 
 //WAY-Points swimm
     //Square
-   float x_set_point2[4] = {-0.30, 2.30, 2.30, -0.30};
-   float y_set_point2[4] = {-0.20, -0.20, 1.20, 1.20};
-   float x_set_point1[4] = {0.30, 1.70, 1.70, 0.30};
-   float y_set_point1[4] = {0.20, 0.20, 0.70, 0.70};
+ //  float x_set_point2[4] = {-0.30, 2.30, 2.30, -0.30};
+ //  float y_set_point2[4] = {-0.20, -0.20, 1.20, 1.20};
+ //  float x_set_point1[4] = {0.30, 1.70, 1.70, 0.30};
+ //  float y_set_point1[4] = {0.20, 0.20, 0.70, 0.70};
     //ellipse
    float x_set_point3[10] = {0.20, 0.35,0.75, 1.25,1.65, 1.80,1.65, 1.25, 0.75, 0.35};
    float y_set_point3[10] = {0.45, 0.30, 0.21, 0.21, 0.30, 0.45, 0.60, 0.69, 0.69, 0.60};
@@ -488,11 +488,11 @@ void HippocampusTrajectoryPlanner::ellipse()
         counter_limit = 4;
 
        }else if(_params.wp_shape == 1){
-           for (int i = 0; i<4; i = i+1){
+           for (int i = 0; i<10; i = i+1){
                 x_set_point[i] = x_set_point2[i];
                 y_set_point[i] = y_set_point2[i];
             }
-        counter_limit = 4;
+        counter_limit = 10;
         }else if(_params.wp_shape == 2){
            for (int i = 0; i<10; i = i+1){
                 x_set_point[i] = x_set_point3[i];
