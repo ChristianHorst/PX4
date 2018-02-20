@@ -377,7 +377,7 @@ void Read_EKF_Data::ekf_update_poll()
         /* give the mocap topic the new values*/
 
 
-        _mocap_vec.z = water_depth;
+        _mocap_vec.z = water_depth + x_B(2)*0.21f;
 
 
     //save to sd-card

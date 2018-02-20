@@ -64,6 +64,7 @@
 #include <poll.h>
 #include <drivers/drv_hrt.h>
 #include <arch/board/board.h>
+#include <numeric>
 // uORB topics
 #include <uORB/uORB.h>
 #include <uORB/topics/actuator_controls.h>              // this topic gives the actuators control input
@@ -121,6 +122,7 @@ private:
     int     _actuator_outputs_sub;
 	int     sd_save;
 	int     yaw_drift_compensation_init;
+	int     weight_counter;
   //  int		_sensors_sub;
 
 	// topic publications
@@ -182,6 +184,7 @@ private:
     float       _depth_i_old;
     float       _depth_d;
     float       _depth_pid;
+    float pitch_des;
 
     /* Parameters for Attitude Controller */
         float       _roll_angle;
@@ -190,13 +193,17 @@ private:
         float       _roll_d;
         float       _roll_pd;
 
-        float       _pitch_angle;
+        float       _pitch_angle_deg;
         float       _pitch_err;
         float       _pitch_p;
         float       _pitch_d;
         float       _yaw_pd;
         float       _yaw_p;
         float       _yaw_d;
+
+        float pitch_weight;
+
+        float depth_weight;
 
     // controller type
 	char type_array[100];
@@ -228,6 +235,8 @@ private:
 		param_t L;
 		param_t OG_THRUST;
 		param_t OG_YAW;
+		param_t OG_THRUST_C;
+		param_t OG_YAW_C;
 		param_t OG_PITCH;
 		param_t OG_ROLL;
 		param_t PI_RO_ONLY;
@@ -235,9 +244,12 @@ private:
 		param_t PITCH;
 		param_t YAW;
 		param_t SCALE;
+		param_t SCALE_SAT;
 		param_t MIX;
 		param_t WS_CONTROL;
 		param_t NO_BACK;
+		param_t PITCH_CONT;
+		param_t PITCH_DES_L;
 
 		 param_t depth_sp;
          param_t depth_p_gain;
@@ -262,8 +274,10 @@ private:
          param_t roll_sp;
          param_t pitch_sp;
 
-         param_t weight_pitch;
-         param_t weight_depth;
+         param_t weight_pitch1;
+         param_t weight_depth1;
+         param_t weight_pitch2;
+         param_t weight_depth2;
 	}		_params_handles;		// handles for to find parameters
 
 	struct {
@@ -283,20 +297,25 @@ private:
 		float L;
 		float OG_thrust;                       // operating grade
 		float OG_yaw;                       // operating grade
+		float OG_thrust_c;                       // operating grade
+		float OG_yaw_c;                       // operating grade
 		float OG_pitch;                       // operating grade
 		float OG_roll;                       // operating grade
 		float roll;
 		float pitch;
 		float yaw;
+		float scale_sat;
 		int scale;
 		int mix;
 		int pi_ro_only;                       // set pitch and roll only
 		int WS_control;                       // set pitch and roll only
         int no_back;
+        int pitch_cont;
 		 float depth_sp;      /**> Desired depth */
          float depth_p_gain;
          float depth_i_gain;
          float depth_d_gain;
+         float pitch_des_l;
 
          //SLIDING-MODE-OBSERVER (SMO)
          float rho;
@@ -316,8 +335,10 @@ private:
          float roll_sp;
          float pitch_sp;
 
-         float weight_pitch;
-         float weight_depth;
+         float weight_pitch1;
+         float weight_depth1;
+         float weight_pitch2;
+         float weight_depth2;
 	}		_params;
 
 	// actualizes position data
@@ -415,6 +436,8 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
 	_params.L = 0.0f;
 	_params.OG_thrust = 0.0f;
 	_params.OG_yaw = 0.0f;
+	_params.OG_thrust_c = 0.0f;
+	_params.OG_yaw_c = 0.0f;
 	_params.OG_pitch = 0.0f;
 	_params.OG_roll = 0.0f;
 	_params.pi_ro_only = 0;
@@ -423,6 +446,8 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
 	_params.yaw = 0.0f;
 	_params.WS_control = 0.0f;
 	_params.no_back = 0.0f;
+	_params.pitch_cont = 0.0f;
+	_params.pitch_des_l = 0.0f;
 	sd_save = 0;
 
 	// set initial values of vectors to zero
@@ -452,7 +477,7 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
     _xhat2 = 0.0; //Estimated velocity in m/s
     _xhat1_prev = 0; //Estimated depth at previous time step in m
     _xhat2_prev = 0; //Estimated velocity at previous time step in m/s
-
+    weight_counter = 0;
 	// allocate controller type
 	strcpy(&type_array[0], type_ctrl);
 
@@ -494,17 +519,21 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
 	_params_handles.L	            = 	param_find("PC_L");
 	_params_handles.OG_THRUST	    = 	param_find("PC_OG_THRUST");
     _params_handles.OG_YAW	        = 	param_find("PC_OG_YAW");
+	_params_handles.OG_THRUST_C	    = 	param_find("PC_OG_THRUST_C");
+    _params_handles.OG_YAW_C	        = 	param_find("PC_OG_YAW_C");
     _params_handles.OG_PITCH	    = 	param_find("PC_OG_PITCH");
     _params_handles.OG_ROLL	        = 	param_find("PC_OG_ROLL");
 	_params_handles.ROLL	        = 	param_find("PC_ROLL");
 	_params_handles.PITCH	        = 	param_find("PC_PITCH");
 	_params_handles.YAW	            = 	param_find("PC_YAW");
     _params_handles.SCALE	        = 	param_find("PC_SCALE");
+    _params_handles.SCALE_SAT	    = 	param_find("PC_SCALE_SAT");
     _params_handles.MIX	            = 	param_find("PC_MIX");
     _params_handles.PI_RO_ONLY	    = 	param_find("PC_PI_RO_ONLY");
     _params_handles.WS_CONTROL	    = 	param_find("PC_WS_CONTROL");
     _params_handles.NO_BACK	    = 	param_find("PC_NO_BACK");
-
+    _params_handles.PITCH_CONT    = 	param_find("PC_PITCH_CONT");
+    _params_handles.PITCH_DES_L    = 	param_find("PC_PITCH_DES_L");
 
 
     _params_handles.depth_sp        =   param_find("PC_DEPTH");
@@ -526,8 +555,10 @@ HippocampusPathControl::HippocampusPathControl(char *type_ctrl) :
     _params_handles.roll_sp         =   param_find("PC_ROLL_SP_DEG");
     _params_handles.pitch_sp         =   param_find("PC_PITCH_SP_DEG");
 
-    _params_handles.weight_pitch    =   param_find("PC_WEIGHT_PITCH");
-    _params_handles.weight_depth    =   param_find("PC_WEIGHT_DEPTH");
+    _params_handles.weight_pitch1    =   param_find("PC_WEIGHT_PITCH1");
+    _params_handles.weight_depth1    =   param_find("PC_WEIGHT_DEPTH1");
+    _params_handles.weight_pitch2    =   param_find("PC_WEIGHT_PITCH2");
+    _params_handles.weight_depth2    =   param_find("PC_WEIGHT_DEPTH2");
 	// fetch initial parameter values
 	parameters_update();
 }
@@ -610,6 +641,10 @@ int HippocampusPathControl::parameters_update()
 	_params.OG_thrust = v;
 	param_get(_params_handles.OG_YAW, &v);
 	_params.OG_yaw = v;
+    param_get(_params_handles.OG_THRUST_C, &v);
+	_params.OG_thrust_c = v;
+	param_get(_params_handles.OG_YAW_C, &v);
+	_params.OG_yaw_c = v;
 	param_get(_params_handles.OG_PITCH, &v);
 	_params.OG_pitch = v;
 	param_get(_params_handles.OG_ROLL, &v);
@@ -624,12 +659,18 @@ int HippocampusPathControl::parameters_update()
 	_params.yaw = v;
 	param_get(_params_handles.SCALE, &v);
 	_params.scale = v;
+		param_get(_params_handles.SCALE_SAT, &v);
+	_params.scale_sat = v;
 	param_get(_params_handles.MIX, &v);
 	_params.mix = v;
 	param_get(_params_handles.WS_CONTROL, &v);
 	_params.WS_control = v;
 	param_get(_params_handles.NO_BACK, &v);
 	_params.no_back = v;
+	param_get(_params_handles.PITCH_CONT, &v);
+	_params.pitch_cont = v;
+	param_get(_params_handles.PITCH_DES_L, &v);
+	_params.pitch_des_l = v;
 
 	   param_get(_params_handles.depth_sp, &(_params.depth_sp));
     param_get(_params_handles.depth_p_gain, &(_params.depth_p_gain));
@@ -650,8 +691,10 @@ int HippocampusPathControl::parameters_update()
     param_get(_params_handles.yaw_rate_sp, &(_params.yaw_rate_sp));
     param_get(_params_handles.roll_sp, &(_params.roll_sp));
     param_get(_params_handles.pitch_sp, &(_params.pitch_sp));
-    param_get(_params_handles.weight_pitch, &(_params.weight_pitch));
-    param_get(_params_handles.weight_depth, &(_params.weight_depth));
+    param_get(_params_handles.weight_pitch1, &(_params.weight_pitch1));
+    param_get(_params_handles.weight_depth1, &(_params.weight_depth1));
+    param_get(_params_handles.weight_pitch2, &(_params.weight_pitch2));
+    param_get(_params_handles.weight_depth2, &(_params.weight_depth2));
 
 	return OK;
 }
@@ -1008,29 +1051,18 @@ void HippocampusPathControl::path_control(float dt)
 	    //e_r(2) = psi_des-euler.psi();
 
         e_r_1 = psi_des-euler.psi();
-        /*e_r_2 = euler.psi()-psi_des;
 
-          if (abs(e_r_1) > abs(e_r_2)){
-	    e_r(2) = e_r_2;
-	    }   else{
-	    e_r(2) = e_r_1;
-	    }
-        */
         if(e_r_1>3.1416f){
-            e_r(2) = e_r_1-3.1416f*2.0f;
+            e_r(2) = (e_r_1-3.1416f*2.0f);
             }else if(e_r_1<-3.1416f){
-            e_r(2)=e_r_1+3.1416f*2.0f;
+            e_r(2)=(e_r_1+3.1416f*2.0f);
             }else{
-            e_r(2) = e_r_1;
+            e_r(2) = (e_r_1)/3.1416f;
             }
-	   // if (e_r(2) > 4.0f){
-	   // e_r(2) = e_r(2) - 2.0f * pi;
-	   // }   else if (e_r(2) < -4.0f){
-	   // e_r(2) = e_r(2) + 2.0f* pi;
-	   // }
+
 
 	    float yaw_des = 0.0f;
-        e_w (2) = _v_att.yawspeed - yaw_des ;
+        e_w (2) = yaw_des -_v_att.yawspeed  ;
 
 
             /* Calculate P-term of PD-Controller (Roll) */
@@ -1070,14 +1102,16 @@ void HippocampusPathControl::path_control(float dt)
             /* calculate actual water depth */
             _depth = ( _pressure_new - _p_zero ) / ( _roh_g ); //unit meter
 
-
+            _depth = _depth + x_B(2)*0.21f;
         /**< PID-Controller for Pitch */
 
             /* Calculate measured pitch angle in degree */
-            _pitch_angle = euler.theta() * (180.0f/3.1416f);
+            _pitch_angle_deg = euler.theta() * (180.0f/3.1416f);
+
+
 
             /* Calculate pitch error */
-            _pitch_err = _params.pitch_sp - _pitch_angle;
+            _pitch_err = _params.pitch_sp - _pitch_angle_deg;
 
             /* Calculate P-term of PD-Controller (Pitch) */
             _pitch_p = _pitch_err * _params.pitch_gain;
@@ -1100,6 +1134,8 @@ void HippocampusPathControl::path_control(float dt)
             /* calculate the depth error */
             _depth_err = _depth - _params.depth_sp;
 
+          if (_params.pitch_cont ==0){
+
             /* P-term of PID-controller */
             _depth_p = _params.depth_p_gain * _depth_err;
 
@@ -1107,22 +1143,53 @@ void HippocampusPathControl::path_control(float dt)
             _depth_i = _depth_i_old + (_depth_err * _iterationtime);
             _depth_i_old = _depth_i;
 
-            /* PID-Controller */
-            _depth_pid = _params.weight_depth * (_depth_p + _params.depth_i_gain * _depth_i + _params.depth_d_gain * _depth_smo) + _params.weight_pitch * (_pitch_p + _pitch_d);
+
+             pitch_weight = (double)_params.weight_pitch2 -(sqrt(_depth_err*_depth_err))*(double)2.0f*(double)(_params.weight_pitch2-_params.weight_pitch1);
+             depth_weight = (double)_params.weight_depth2 +(sqrt(_depth_err*_depth_err))*(double)2.0f*(double)(_params.weight_depth1-_params.weight_depth2);
+            _depth_pid = depth_weight* (_depth_p + _params.depth_i_gain * _depth_i + _params.depth_d_gain * _depth_smo) + pitch_weight * (_pitch_p + _pitch_d);
+
+            /*
+            if(sqrt(_depth_err*_depth_err)>(double)0.15f){
+            // PID-Controller
+            _depth_pid = _params.weight_depth1 * (_depth_p + _params.depth_i_gain * _depth_i + _params.depth_d_gain * _depth_smo) + _params.weight_pitch1 * (_pitch_p + _pitch_d);
+                    if(weight_counter == 0){
+                    PX4_INFO("Error > 0.15: weight 1");
+                    weight_counter = 1;
+                            }
+            }else {
+            _depth_pid = _params.weight_depth2 * (_depth_p + _params.depth_i_gain * _depth_i + _params.depth_d_gain * _depth_smo) + _params.weight_pitch2 * (_pitch_p + _pitch_d);
+
+            if(weight_counter == 1){
+                    PX4_INFO("Error < 0.15: weight 2");
+                    weight_counter = 0;}
+            }
+
+            */
+
+        }else if (_params.pitch_cont == 1){
+        // New Depth Control
+        //_depth_err = _depth-_params.depth_sp;
+        pitch_des =  atan(_depth_err / _params.pitch_des_l);
+
+        _pitch_err = (pitch_des - _pitch_angle_deg * (3.146f / 180.0f));
+        _depth_p =  _pitch_err;
+        _depth_i = (_depth_i_old + (_pitch_err * _iterationtime))/10.0f;
+        _depth_i_old = _depth_i;
+        _depth_d = -_omega(1);
+        _depth_pid = _params.depth_p_gain *_depth_p + _params.depth_i_gain * _depth_i +  _params.depth_d_gain *_depth_d;
+        }
 
 
 
-            _debug_value.value =_depth ;
-            _debug_value.ind = 1;
 
         /**< Attitude Controller: Roll */
 
             /* Calculate measured roll angle in degree */
-            _roll_angle = euler.phi() * (180.0f/3.1416f);
+            _roll_angle = euler.phi()*( 180.0f/3.146f);
 
             /* Calculate roll error */
             _roll_err = _params.roll_sp - _roll_angle;
-
+            _roll_err = _roll_err;
             /* Calculate P-term of PD-Controller (Roll) */
             _roll_p = _roll_err * _params.roll_gain;
 
@@ -1131,6 +1198,7 @@ void HippocampusPathControl::path_control(float dt)
 
             /* Calculate PD-Controller */
             _roll_pd = _roll_p + _roll_d;
+
                 //Scale
                 //_roll_pd = _roll_pd * 0.01f;
 
@@ -1141,22 +1209,136 @@ void HippocampusPathControl::path_control(float dt)
         e_v(2) = _depth_smo;
         // calculate desired force
 
-	    F_des = - _params.K_p * e_p - _params.K_v * e_v + rdd_T * _params.m + M_A_W * rdd_T;
+	    F_des = - _params.K_p * e_p - _params.K_v * e_v;
         //F_des(2) = 0;                                       // for only movement in x-y plane
 
 	    u_1 = F_des * x_B;
 
-
+        		PX4_INFO("Befor IF:\t%8.2f",
+			 (double) u_1);
         if (_params.no_back == 1){
             if (u_1<0.0f){
             u_1 = 0.0f;
+            		PX4_INFO("IF:\t%8.2f",
+			 (double) u_1);
             }
+
         }
 
-               _debug_vect.x = u_1;
-            _debug_vect.y = _pitch_p;
-            _debug_vect.z = _depth_pid;
+
+
+
+
+
+
+
+            //Define own Scaling vector to avoid saturation
+
+            /*
+            	float SCALE_M1[4][4] = {{-10000,  -10000,  -10000,  10000 },
+                                        {-10000,  -10000,   -10000, 10000 },
+                                        {10000,   10000,   -10000,  10000 },
+                                        {10000,  10000,  -10000,  10000}};
+
+                float SCALE_M2[4][4] = {{-10000,  -10000,  -10000,  10000 },
+                                        {10000,  10000,   -10000, 10000 },
+                                        {10000, 10000,   -10000,  10000 },
+                                        {-10000,  -10000,  -10000,  10000}};
+
+                float SCALE_M3[4][4] = {{-10000,  -10000,  -10000,  10000 },
+                                        {10000,  10000,   -10000, 10000 },
+                                        {-10000,   -10000,   -10000,  10000 },
+                                        {10000,  10000,  -10000,  10000}};
+
+                float SCALE_M4[4][4] = {{-10000,  -10000,  -10000,  10000 },
+                                        {-10000,  -10000,   -10000, 10000 },
+                                        {-10000,   -10000,   -10000,  10000 },
+                                        {-10000,  -10000,  -10000,  10000}};
+
+
+
+                    math::Matrix<4, 4> scale_M1(SCALE_M1);
+                    math::Matrix<4, 4> scale_M2(SCALE_M2);
+                    math::Matrix<4, 4> scale_M3(SCALE_M3);
+                    math::Matrix<4, 4> scale_M4(SCALE_M4);
+
+                float Actuator_input[4] ={_roll_pd, _depth_pid, _yaw_pd, u_1};
+                //float Actuator_input[4] ={0,0,0,1};
+                math::Vector<4> actuator_input(Actuator_input);
+                math::Vector<4>motor_signals1=scale_M1 * actuator_input;
+                math::Vector<4>motor_signals2=scale_M2 * actuator_input;
+                math::Vector<4>motor_signals3=scale_M3 * actuator_input;
+                math::Vector<4>motor_signals4=scale_M4 * actuator_input;
+
+                float m1 = 0.0f;
+                float m2 = 0.0f;
+                float m3 = 0.0f;
+                float m4 = 0.0f;
+
+                for (int i=0; i<4; i=i+1){
+                m1 =m1+ motor_signals1(i);
+                m2 =m2+ motor_signals2(i);
+                m3 =m3+ motor_signals3(i);
+                m4 =m4+ motor_signals4(i);
+                          }
+
+        */
+                float m1 = -_roll_pd - _depth_pid +_yaw_pd + u_1;
+                float m2 = -_roll_pd + _depth_pid +_yaw_pd - u_1;
+                float m3 = -_roll_pd + _depth_pid -_yaw_pd + u_1;
+                float m4 = -_roll_pd - _depth_pid -_yaw_pd - u_1;
+        float motor_output[4] = {m1,m2,m3,m4};
+        float max_output = 0.0f;
+        for (int i=0; i<4; i=i+1){
+                if (sqrt(motor_output[i]*motor_output[i])>(double)max_output){
+                max_output =(double)_params.scale_sat*sqrt(motor_output[i]*motor_output[i]);
+                 }
+        }
+
+
+
+    if (_params.scale == 0){
+      _roll_pd    = _roll_pd*0.6666f;
+        _depth_pid  = _depth_pid*0.6666f;
+        _yaw_pd     = _yaw_pd*0.6666f;
+        u_1         = u_1*0.6666f;
+    }else if ((_params.scale == 1)){
+
+    _roll_pd    = _roll_pd*0.6666f;
+        _depth_pid  = _depth_pid*0.6666f;
+        _yaw_pd     = _yaw_pd*0.6666f;
+        u_1         = u_1*0.6666f;
+
+       if(max_output>3.9f){
+        _roll_pd    = _roll_pd/max_output;
+        _depth_pid  = _depth_pid/max_output;
+        _yaw_pd     = _yaw_pd/max_output;
+        u_1         = u_1/max_output;}
+
+    }else if ((_params.scale == 2)){
+       if(max_output>3.9f){
+        _roll_pd    = _roll_pd/max_output;
+        _depth_pid  = _depth_pid/max_output;
+        _yaw_pd     = _yaw_pd/max_output;
+        u_1         = u_1/max_output;}
+    }
+/*
+            PX4_INFO("e_p:\t%8.2f\t%8.2f\t%8.2f\t%8.2f\t%8.2f",
+			 (double)m1,
+			 (double)m2,
+			 (double)m3,
+			 (double)m4,
+			 (double)max_output);
+
+*/ // 		PX4_INFO("e_v:\t%8.2f",
+//			 (double) u_1);
+
+            _debug_vect.x = _roll_pd;
+            _debug_vect.y =  _depth_pid;
+            _debug_vect.z =  _yaw_pd ;
             strcpy(_debug_vect.name, "DEBUG_VECT");
+            _debug_value.value = u_1 ;
+            _debug_value.ind = 1;
 
 	}
 
@@ -1229,7 +1411,7 @@ float C_MIX_sim[4][4]= {
 
   //  if (_v_traj_sp.start == 1) {
 	// give the inputs to the actuators
-    if (_params.scale == 1){
+    if (_params.scale == 10){
 
     //Thrust and yaw -control
             _actuators.control[0] = 0 * _params.OG_roll;       // roll
@@ -1238,7 +1420,7 @@ float C_MIX_sim[4][4]= {
             _actuators.control[3] = mix_input(3) * _params.OG_thrust; // thrust
 
 
-    } else if ( _params.scale == 0){
+    } else if ( _params.scale == 11){
       //  u_ges = u_ges * _params.OG;
             _actuators.control[0] = 0.0f * _params.OG_roll;// mix_input(0);           // roll
             _actuators.control[1] = 0.0f * _params.OG_pitch;//mix_input(1);           // pitch
@@ -1259,8 +1441,8 @@ float C_MIX_sim[4][4]= {
             if(_params.pi_ro_only == 1){
               _actuators.control[0] = _roll_pd * _params.OG_roll;       // roll
             _actuators.control[1] = _depth_pid  * _params.OG_pitch;       // pitch
-            _actuators.control[2] = _params.OG_yaw; // yaw
-            _actuators.control[3] = _params.OG_thrust; // thrust
+            _actuators.control[2] = _params.OG_yaw_c; // yaw
+            _actuators.control[3] = _params.OG_thrust_c; // thrust
 
             }
 
@@ -1354,7 +1536,12 @@ float C_MIX_sim[4][4]= {
 			 (double)e_p(1),
 			 (double)e_p(2));
 */
-		/*
+PX4_INFO("e_p:\t%8.2f\t%8.2f\t%8.2f\t%8.2f",
+			 (double)_depth_err,
+			 (double)_depth,
+			 (double) _params.depth_sp,
+			 (double) abs(_depth_err));
+	/*
 		PX4_INFO("e_v:\t%8.2f\t%8.2f\t%8.2f",
 			 (double)e_v(0),
 			 (double)e_v(1),
