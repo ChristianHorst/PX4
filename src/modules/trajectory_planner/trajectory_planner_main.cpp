@@ -444,8 +444,8 @@ void HippocampusTrajectoryPlanner::ellipse()
  //float x_set_point1[11] = {0.6500, 0.8247, 1.2876, 1.8772, 2.3874, 2.6400, 2.5468, 2.1403, 1.5625, 1.0153, 0.6898};
  //float y_set_point1[11] = {0.8200, 0.5941, 0.4472, 0.4305, 0.5498, 0.7636, 0.9970, 1.1686, 1.2185, 1.1291, 0.9318};
 
-  float x_set_point2[10] = {0.85, 0.99, 1.36, 1.83, 2.24, 2.44, 2.37, 2.04, 1.58, 1.14};
-  float y_set_point2[10] = {0.82, 0.68, 0.59, 0.58, 0.65, 0.78, 0.93, 1.04, 1.07, 1.01};
+  float x_set_point2[4] = {1.2, 2.4, 2.4, 1.2};
+  float y_set_point2[4] = {0.7, 0.7, 1.1, 1.1};
   float x_set_point1[4] = {1, 2.2, 2.2, 1};
   float y_set_point1[4] = {0.65, 0.65, 1.25, 1.25};
 
@@ -457,16 +457,18 @@ void HippocampusTrajectoryPlanner::ellipse()
  //  float x_set_point1[4] = {0.30, 1.70, 1.70, 0.30};
  //  float y_set_point1[4] = {0.20, 0.20, 0.70, 0.70};
     //ellipse
-   float x_set_point3[10] = {0.20, 0.35,0.75, 1.25,1.65, 1.80,1.65, 1.25, 0.75, 0.35};
-   float y_set_point3[10] = {0.45, 0.30, 0.21, 0.21, 0.30, 0.45, 0.60, 0.69, 0.69, 0.60};
-   float x_set_point4[10] = {-1.00, -0.62, 0.38, 1.62, 2.62, 3.00, 2.62, 1.62, 0.38, -0.62};
-   float y_set_point4[10] = {0.45,-0.14, -0.50, -0.50, -0.14, 0.45, 1.04, 1.40, 1.40, 1.04 };
+   float x_set_point3[10] = {1.8, 2.329, 2.656, 2.6560, 2.3290, 1.8,1.2710, 0.9440, 0.9440, 1.2710};
+   float y_set_point3[10] = {0.8, 1.228, 1.0645, 0.5355, 0.3720,0.8, 1.2280,1.0645, 0.5355, 0.3720};
+
+
+   float x_set_point4[8] = {1.0, 1.4, 2.0, 2.4, 2.4, 2.0, 1.4, 1.0};
+   float y_set_point4[8] = {1.1, 1.2, 1.2, 1.1, 0.7, 0.6, 0.6, 0.7};
 
      //8-shape
-   float x_set_point5[10] = {1.0000, 1.3527, 1.5706, 1.5706, 1.3527, 1.0000, 0.6473, 0.4294, 0.4294, 0.6473};
-   float y_set_point5[10] = { 0.4000,0.6853, 0.5763,0.2237, 0.1147,0.4000, 0.6853,0.5763, 0.2237,0.1147};
-   float x_set_point6[10] = {1.0000, 2.0580, 2.7119, 2.7119, 2.0580, 1.0000, -0.0580, -0.7119, -0.7119, -0.0580};
-   float y_set_point6[10] = {0.4000, 1.2560, 0.9290, -0.1290, -0.4560, 0.4000, 1.2560, 0.9290, -0.1290,-0.4560 };
+   float x_set_point5[4] = {1.0, 2.0, 2.0, 1.0};
+   float y_set_point5[4] = {0.60, 0.60, 0.9, 0.9};
+   float x_set_point6[4] = {1.0, 2.0, 2.0, 1.0};
+   float y_set_point6[4] = {0.30, 0.30, 1.40, 1.40};
 
 
 
@@ -488,36 +490,39 @@ void HippocampusTrajectoryPlanner::ellipse()
         counter_limit = 4;
 
        }else if(_params.wp_shape == 1){
-           for (int i = 0; i<10; i = i+1){
+           for (int i = 0; i<4; i = i+1){
                 x_set_point[i] = x_set_point2[i];
                 y_set_point[i] = y_set_point2[i];
             }
-        counter_limit = 10;
+        counter_limit = 4;
+
         }else if(_params.wp_shape == 2){
            for (int i = 0; i<10; i = i+1){
                 x_set_point[i] = x_set_point3[i];
                 y_set_point[i] = y_set_point3[i];
             }
         counter_limit = 10;
+
         }else if(_params.wp_shape == 3){
-           for (int i = 0; i<10; i = i+1){
+           for (int i = 0; i<8; i = i+1){
                 x_set_point[i] = x_set_point4[i];
                 y_set_point[i] = y_set_point4[i];
             }
-        counter_limit = 10;
+        counter_limit = 8;
+
         }else if(_params.wp_shape == 4){
-           for (int i = 0; i<10; i = i+1){
+           for (int i = 0; i<4; i = i+1){
                 x_set_point[i] = x_set_point5[i];
                 y_set_point[i] = y_set_point5[i];
             }
-        counter_limit = 10;
+        counter_limit = 4;
         }
         else if(_params.wp_shape == 5){
-           for (int i = 0; i<10; i = i+1){
+           for (int i = 0; i<4; i = i+1){
                 x_set_point[i] = x_set_point6[i];
                 y_set_point[i] = y_set_point6[i];
             }
-        counter_limit = 10;
+        counter_limit = 4;
         }
 
     // allocate position

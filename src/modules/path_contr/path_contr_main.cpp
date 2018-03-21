@@ -896,9 +896,6 @@ void HippocampusPathControl::path_control(float dt)
 
 	// get trajectory setpoint data
 	math::Vector<3> r_T(_v_traj_sp.x, _v_traj_sp.y, _v_traj_sp.z);                  // desired position
-	math::Vector<3> rd_T(_v_traj_sp.dx, _v_traj_sp.dy, _v_traj_sp.dz);              // desired velocity
-	math::Vector<3> rdd_T(_v_traj_sp.ddx, _v_traj_sp.ddy, _v_traj_sp.ddz);          // desired acceleration
-	math::Vector<3> rddd_T(_v_traj_sp.dddx, _v_traj_sp.dddy, _v_traj_sp.dddz);
 
 	// desired force and outputs
 	math::Vector<3> F_des;
@@ -927,122 +924,12 @@ void HippocampusPathControl::path_control(float dt)
 						1));                             // orientation body y-axis (in world coordinates)
 	math::Vector<3> z_B(R(0, 2), R(1, 2), R(2,
 						2));                             // orientation body z-axis (in world coordinates)
-	math::Vector<3> x_B_des;                                                    // orientation body x-axis desired
-	math::Vector<3> y_B_des;                                                    // orientation body y-axis desired
-	math::Vector<3> z_B_des;                                                    // orientation body z-axis desired
 
-	// Get Flow Velocity
-    math::Vector<3> flowVel = flowField(r);
-
-	// Transform Matrices into World coordinates
-    math::Matrix<3,3> M_A_W = R * _params.M_A * R.transposed();
-    math::Matrix<3,3> D_W = R * _params.D * R.transposed();
 
     //euler angles
     matrix::Eulerf euler = matrix::Quatf(_v_att.q);
 
-
-	if (!strcmp(type_array, "full")) {
-        math::Vector<3> z_C_des(0, -sinf(_v_traj_sp.roll), cosf(_v_traj_sp.roll));    // orientation C-Coordinate system desired
-	    math::Vector<3> y_C_des(0, cosf(_v_traj_sp.roll), sinf(_v_traj_sp.roll));     // orientation C-Coordinate system desired
-
-	    // projection on x_B
-	    math::Vector<3> h_w;
-	    math::Vector<3> h_w_des;
-
-	    // thrust input
-	    e_p = r - r_T;                      // calculate position error
-	    e_v = rd - rd_T;                    // calculate velocity error
-
-        // calculate desired force
-        math::Vector<3> rd_e = rd_T - flowVel;
-	    F_des = - _params.K_p * e_p - _params.K_v * e_v + rdd_T * _params.m + M_A_W * rdd_T + D_W * rd_e;
-        F_des(2) = 0;                                       // for only movement in x-y plane
-	    u_1 = F_des * x_B;                                 // calculate desired thrust
-
-	    // calculate orientation vectors
-	    x_B_des = F_des / F_des.length();
-
-	    // check wether a rotation matrix created using y_B_des is closer to the actual position or z_B_des
-	    math::Vector<3> y_B_des_1 = z_C_des % x_B_des;
-	    y_B_des_1 = y_B_des_1 / y_B_des_1.length();
-	    math::Vector<3> z_B_des_1 = x_B_des % y_B_des_1;
-
-	    math::Vector<3> z_B_des_2 = x_B_des % y_C_des;
-	    z_B_des_2 = z_B_des_2 / z_B_des_2.length();
-	    math::Vector<3> y_B_des_2 = z_B_des_2 % x_B_des;
-
-	    // calculate desired rotation matrix and error
-	    math::Matrix<3,3> R_des_1;
-	    R_des_1.set_col(0, x_B_des);
-	    R_des_1.set_col(1, y_B_des_1);
-	    R_des_1.set_col(2, z_B_des_1);
-	    math::Vector<3> e_r_1 = rotError(R, R_des_1);
-
-	    math::Matrix<3,3> R_des_2;
-	    R_des_2.set_col(0, x_B_des);
-	    R_des_2.set_col(1, y_B_des_2);
-	    R_des_2.set_col(2, z_B_des_2);
-	    math::Vector<3> e_r_2 = rotError(R, R_des_2);
-
-	    // check which orientation error is smaller and use this as desired orientation
-	    if (e_r_1.length() < e_r_2.length()) {
-	        e_r = e_r_1;
-	        R_des = R_des_1;
-	        y_B_des = y_B_des_1;
-	        z_B_des = z_B_des_1;
-	    } else {
-	        e_r = e_r_2;
-	        R_des = R_des_2;
-	        y_B_des = y_B_des_2;
-	        z_B_des = z_B_des_2;
-	    }
-
-        float d = 10;
-        float m_a = 1.5;
-
-	    // Calculate desired angular velocity
-	    h_w_des = (rddd_T * _params.m + rddd_T * m_a + rdd_T * d - (x_B_des * ((rddd_T * _params.m + rddd_T * m_a
-	                + rdd_T * d) * x_B_des))) * (1 / u_1);
-
-	    double q_ang = -h_w_des * z_B_des;
-	    double r_ang = -h_w_des * y_B_des;
-	    double p_ang = _v_traj_sp.droll * x_B_des(0);
-	    w_BW_T = x_B_des * p_ang + y_B_des * q_ang + z_B_des * r_ang;
-
-	    // calculate the angular velocity error
-	    e_w = R.transposed() * w_BW - R.transposed() * w_BW_T;
-
-
-
-	} else if (!strcmp(type_array, "attitude")) {
-	    float c_roll = cosf(_params.roll);
-	    float s_roll = sinf(_params.roll);
-	    float c_pitch = cosf(_params.pitch);
-	    float s_pitch = sinf(_params.pitch);
-	    float c_yaw = cosf(_params.yaw);
-	    float s_yaw = sinf(_params.yaw);
-
-	    R_des(0,0) = c_pitch*c_yaw;
-	    R_des(0,1) = s_roll*s_pitch*c_yaw - c_roll*s_yaw;
-	    R_des(0,2) = c_roll*s_pitch*c_yaw + s_roll*s_yaw;
-	    R_des(1,0) = c_pitch*s_yaw;
-	    R_des(1,1) = s_roll*s_pitch*s_yaw + c_roll*c_yaw;
-	    R_des(1,2) = c_roll*s_pitch*s_yaw - s_roll*c_yaw;
-	    R_des(2,0) = -s_pitch;
-	    R_des(2,1) = s_roll*c_pitch;
-	    R_des(2,2) = c_roll*c_pitch;
-
-        e_r = rotError(R, R_des);
-
-	    x_B_des = R_des.get_colValues(0);
-	    y_B_des = R_des.get_colValues(1);
-	    z_B_des = R_des.get_colValues(2);
-
-        u_1 = 0.0f;
-        e_w = R.transposed() * w_BW;
-
-	}else if (!strcmp(type_array, "WS")) {
+if (!strcmp(type_array, "WS")) {
 
 	    //YAW_Control
         float e_r_1;
@@ -1061,8 +948,8 @@ void HippocampusPathControl::path_control(float dt)
             }
 
 
-	    float yaw_des = 0.0f;
-        e_w (2) = yaw_des -_v_att.yawspeed  ;
+
+        e_w (2) = -_v_att.yawspeed  ;
 
 
             /* Calculate P-term of PD-Controller (Roll) */
@@ -1081,7 +968,7 @@ void HippocampusPathControl::path_control(float dt)
         /* get current rates from sensors */
             _omega(0) = _v_att.rollspeed;
             _omega(1) = _v_att.pitchspeed;
-            _omega(2) = _v_att.yawspeed;
+
 
         /** get pressure value from sensor*/
             orb_copy(ORB_ID(pressure), _pressure_raw, &_press);
@@ -1110,22 +997,12 @@ void HippocampusPathControl::path_control(float dt)
 
 
 
-            /* Calculate pitch error */
-            _pitch_err = _params.pitch_sp - _pitch_angle_deg;
-
-            /* Calculate P-term of PD-Controller (Pitch) */
-            _pitch_p = _pitch_err * _params.pitch_gain;
-
-            /* Calculate D-term of PD-Controller (Pitch) */
-            _pitch_d = _omega(1) * _params.pitch_rate_gain;
-
 
             /* calculate iterationtime for Sliding Mode Observer */
             _iterationtime = _pressure_time_new - _pressure_time_old;
             /* scale interationtime*/
             _iterationtime = _iterationtime * 0.0000015f;
 
-            /* calculate d-component of the controler by using a Sliding Mode Observer for accounting possible future trends of the error */
             _depth_smo = get_xhat1(_depth,_iterationtime);
 
             /* set actual pressure from the sensor and absolute time to a "old" controler value */
@@ -1134,39 +1011,8 @@ void HippocampusPathControl::path_control(float dt)
             /* calculate the depth error */
             _depth_err = _depth - _params.depth_sp;
 
-          if (_params.pitch_cont ==0){
-
-            /* P-term of PID-controller */
-            _depth_p = _params.depth_p_gain * _depth_err;
-
-            /* I-term of PID-controller */
-            _depth_i = _depth_i_old + (_depth_err * _iterationtime);
-            _depth_i_old = _depth_i;
 
 
-             pitch_weight = (double)_params.weight_pitch2 -(sqrt(_depth_err*_depth_err))*(double)2.0f*(double)(_params.weight_pitch2-_params.weight_pitch1);
-             depth_weight = (double)_params.weight_depth2 +(sqrt(_depth_err*_depth_err))*(double)2.0f*(double)(_params.weight_depth1-_params.weight_depth2);
-            _depth_pid = depth_weight* (_depth_p + _params.depth_i_gain * _depth_i + _params.depth_d_gain * _depth_smo) + pitch_weight * (_pitch_p + _pitch_d);
-
-            /*
-            if(sqrt(_depth_err*_depth_err)>(double)0.15f){
-            // PID-Controller
-            _depth_pid = _params.weight_depth1 * (_depth_p + _params.depth_i_gain * _depth_i + _params.depth_d_gain * _depth_smo) + _params.weight_pitch1 * (_pitch_p + _pitch_d);
-                    if(weight_counter == 0){
-                    PX4_INFO("Error > 0.15: weight 1");
-                    weight_counter = 1;
-                            }
-            }else {
-            _depth_pid = _params.weight_depth2 * (_depth_p + _params.depth_i_gain * _depth_i + _params.depth_d_gain * _depth_smo) + _params.weight_pitch2 * (_pitch_p + _pitch_d);
-
-            if(weight_counter == 1){
-                    PX4_INFO("Error < 0.15: weight 2");
-                    weight_counter = 0;}
-            }
-
-            */
-
-        }else if (_params.pitch_cont == 1){
         // New Depth Control
         //_depth_err = _depth-_params.depth_sp;
         pitch_des =  atan(_depth_err / _params.pitch_des_l);
@@ -1177,9 +1023,6 @@ void HippocampusPathControl::path_control(float dt)
         _depth_i_old = _depth_i;
         _depth_d = -_omega(1);
         _depth_pid = _params.depth_p_gain *_depth_p + _params.depth_i_gain * _depth_i +  _params.depth_d_gain *_depth_d;
-        }
-
-
 
 
         /**< Attitude Controller: Roll */
@@ -1188,13 +1031,12 @@ void HippocampusPathControl::path_control(float dt)
             _roll_angle = euler.phi()*( 180.0f/3.146f);
 
             /* Calculate roll error */
-            _roll_err = _params.roll_sp - _roll_angle;
-            _roll_err = _roll_err;
+            _roll_err = - _roll_angle;
             /* Calculate P-term of PD-Controller (Roll) */
             _roll_p = _roll_err * _params.roll_gain;
 
             /* Calculate D-term of PD-Controller (Roll) */
-            _roll_d = _omega(0) * _params.roll_rate_gain;
+            _roll_d = -_omega(0) * _params.roll_rate_gain;
 
             /* Calculate PD-Controller */
             _roll_pd = _roll_p + _roll_d;
@@ -1204,89 +1046,31 @@ void HippocampusPathControl::path_control(float dt)
 
         //TRHUST CONTROL
         e_p = r - r_T;                      // calculate position error
-	    e_v = rd - rd_T;                    // calculate velocity error
+	   // e_v = rd - rd_T;                    // calculate velocity error
         e_p(2) = _depth_err;
-        e_v(2) = _depth_smo;
+      //  e_v(2) = _depth_smo;
         // calculate desired force
 
-	    F_des = - _params.K_p * e_p - _params.K_v * e_v;
+	    F_des = - _params.K_p * e_p; //- _params.K_v * e_v;
         //F_des(2) = 0;                                       // for only movement in x-y plane
 
 	    u_1 = F_des * x_B;
 
-        		PX4_INFO("Befor IF:\t%8.2f",
-			 (double) u_1);
         if (_params.no_back == 1){
             if (u_1<0.0f){
             u_1 = 0.0f;
-            		PX4_INFO("IF:\t%8.2f",
-			 (double) u_1);
             }
 
         }
 
 
-
-
-
-
-
-
             //Define own Scaling vector to avoid saturation
 
-            /*
-            	float SCALE_M1[4][4] = {{-10000,  -10000,  -10000,  10000 },
-                                        {-10000,  -10000,   -10000, 10000 },
-                                        {10000,   10000,   -10000,  10000 },
-                                        {10000,  10000,  -10000,  10000}};
-
-                float SCALE_M2[4][4] = {{-10000,  -10000,  -10000,  10000 },
-                                        {10000,  10000,   -10000, 10000 },
-                                        {10000, 10000,   -10000,  10000 },
-                                        {-10000,  -10000,  -10000,  10000}};
-
-                float SCALE_M3[4][4] = {{-10000,  -10000,  -10000,  10000 },
-                                        {10000,  10000,   -10000, 10000 },
-                                        {-10000,   -10000,   -10000,  10000 },
-                                        {10000,  10000,  -10000,  10000}};
-
-                float SCALE_M4[4][4] = {{-10000,  -10000,  -10000,  10000 },
-                                        {-10000,  -10000,   -10000, 10000 },
-                                        {-10000,   -10000,   -10000,  10000 },
-                                        {-10000,  -10000,  -10000,  10000}};
-
-
-
-                    math::Matrix<4, 4> scale_M1(SCALE_M1);
-                    math::Matrix<4, 4> scale_M2(SCALE_M2);
-                    math::Matrix<4, 4> scale_M3(SCALE_M3);
-                    math::Matrix<4, 4> scale_M4(SCALE_M4);
-
-                float Actuator_input[4] ={_roll_pd, _depth_pid, _yaw_pd, u_1};
-                //float Actuator_input[4] ={0,0,0,1};
-                math::Vector<4> actuator_input(Actuator_input);
-                math::Vector<4>motor_signals1=scale_M1 * actuator_input;
-                math::Vector<4>motor_signals2=scale_M2 * actuator_input;
-                math::Vector<4>motor_signals3=scale_M3 * actuator_input;
-                math::Vector<4>motor_signals4=scale_M4 * actuator_input;
-
-                float m1 = 0.0f;
-                float m2 = 0.0f;
-                float m3 = 0.0f;
-                float m4 = 0.0f;
-
-                for (int i=0; i<4; i=i+1){
-                m1 =m1+ motor_signals1(i);
-                m2 =m2+ motor_signals2(i);
-                m3 =m3+ motor_signals3(i);
-                m4 =m4+ motor_signals4(i);
-                          }
-
-        */
                 float m1 = -_roll_pd - _depth_pid +_yaw_pd + u_1;
                 float m2 = -_roll_pd + _depth_pid +_yaw_pd - u_1;
                 float m3 = -_roll_pd + _depth_pid -_yaw_pd + u_1;
                 float m4 = -_roll_pd - _depth_pid -_yaw_pd - u_1;
+
         float motor_output[4] = {m1,m2,m3,m4};
         float max_output = 0.0f;
         for (int i=0; i<4; i=i+1){
@@ -1298,7 +1082,7 @@ void HippocampusPathControl::path_control(float dt)
 
 
     if (_params.scale == 0){
-      _roll_pd    = _roll_pd*0.6666f;
+      _roll_pd      = _roll_pd*0.6666f;
         _depth_pid  = _depth_pid*0.6666f;
         _yaw_pd     = _yaw_pd*0.6666f;
         u_1         = u_1*0.6666f;
@@ -1333,9 +1117,9 @@ void HippocampusPathControl::path_control(float dt)
 */ // 		PX4_INFO("e_v:\t%8.2f",
 //			 (double) u_1);
 
-            _debug_vect.x = _roll_pd;
-            _debug_vect.y =  _depth_pid;
-            _debug_vect.z =  _yaw_pd ;
+            _debug_vect.x = _depth;
+            _debug_vect.y =  _params.depth_sp;
+            _debug_vect.z =  _depth_err ;
             strcpy(_debug_vect.name, "DEBUG_VECT");
             _debug_value.value = u_1 ;
             _debug_value.ind = 1;
@@ -1344,94 +1128,9 @@ void HippocampusPathControl::path_control(float dt)
 
 
 
-//NILS
-
-	// calculate input over feedback loop
-	u_24 = -_params.K_r * e_r - _params.K_w * e_w;
-
-	// scale roll with 1/8
-	u_24(0) = u_24(0) * (_params.L * _params.k_F / _params.k_M);
-
-	// put all calculated control outputs in one vector
-	math::Vector<4> u_ges(u_1, u_24(0), u_24(1), u_24(2));
-//    math::Vector<4> u_ges( u_24(0), u_24(1), u_24(2),u_1);
-
-
-	// Generating K matrix with scaling factors for Forces and Moments
-	float K_SCALE[4][4] = {
-		{_params.k_F, _params.k_F, _params.k_F, _params.k_F},
-		{ -_params.k_M, _params.k_M, -_params.k_M, _params.k_M},
-		{ -_params.k_F * _params.L, -_params.k_F * _params.L, _params.k_F * _params.L, _params.k_F * _params.L},
-		{_params.k_F * _params.L, -_params.k_F * _params.L, -_params.k_F * _params.L, _params.k_F * _params.L}
-	};
-	math::Matrix<4, 4> K_scale(K_SCALE);
-
-	math::Vector<4> omega_des = K_scale.inversed() * u_ges;
-
-    //math::Vector<4> omega_des = u_ges;
-	// Generating C_mix matrix for recalculation to Mixer Inputs
-///*
-
-float C_MIX[4][4];
-math::Matrix<4, 4> C_mix(C_MIX);
-float C_MIX_sim[4][4]= {
-            { -1, -1, 1, 1},
-            {1, -1, -1, 1},
-            { -1, 1, -1, 1},
-            {1, 1, 1, 1}
-            };
- float C_MIX_real[4][4]= {
-            { -1, -1, 1, 1},
-            {-1, 1, 1, -1},
-            { -1, 1, -1, 1},
-            {-1, -1, -1, -1}
-            };
-  math::Matrix<4, 4> C_mix_sim(C_MIX_sim);
-  math::Matrix<4, 4> C_mix_real(C_MIX_real);
-
-    if (_params.mix == 0){
-    //simulation
-    C_mix = C_MIX_sim;
-
-
-    }else if (_params.mix == 1){
-    //real environement
-    C_mix = C_MIX_real;
-    }
-
-
-
-	// calculate the desired rotor velocities
-	math::Vector<4> mix_input = C_mix.inversed() * omega_des;
-
-	// Reduce Input signal by a certain percentage
-	//mix_input = mix_input * _params.OG;
-
-  //  math::Vector<4> mix_input = u_ges * _params.OG;
-
-  //  if (_v_traj_sp.start == 1) {
-	// give the inputs to the actuators
-    if (_params.scale == 10){
-
-    //Thrust and yaw -control
-            _actuators.control[0] = 0 * _params.OG_roll;       // roll
-            _actuators.control[1] = 0 * _params.OG_pitch;       // pitch
-            _actuators.control[2] = mix_input(2) * _params.OG_yaw; // yaw
-            _actuators.control[3] = mix_input(3) * _params.OG_thrust; // thrust
-
-
-    } else if ( _params.scale == 11){
-      //  u_ges = u_ges * _params.OG;
-            _actuators.control[0] = 0.0f * _params.OG_roll;// mix_input(0);           // roll
-            _actuators.control[1] = 0.0f * _params.OG_pitch;//mix_input(1);           // pitch
-            _actuators.control[2] = u_ges(3) * _params.OG_yaw;           // yaw
-            _actuators.control[3] = u_ges(0)* _params.OG_thrust;           // thrust
-
-	}
-    //End of Nils Controler
 
     //Actuator Control for uncoupled Controler
-	if (_params.WS_control ==1){
+
 	        _actuators.control[0] = _roll_pd * _params.OG_roll;       // roll
             _actuators.control[1] = _depth_pid  * _params.OG_pitch;   // pitch
             _actuators.control[2] =  _yaw_pd * _params.OG_yaw;        // yaw
@@ -1444,31 +1143,15 @@ float C_MIX_sim[4][4]= {
             _actuators.control[2] = _params.OG_yaw_c; // yaw
             _actuators.control[3] = _params.OG_thrust_c; // thrust
 
+            }  else if(_params.pi_ro_only == 2){
+              _actuators.control[0] = _roll_pd * _params.OG_roll;       // roll
+            _actuators.control[1] = _depth_pid  * _params.OG_pitch;       // pitch
+            _actuators.control[2] = _yaw_pd * _params.OG_yaw;
+            _actuators.control[3] = _params.OG_thrust_c; // thrust
+
             }
 
-	}
-/*
-	    FILE *sd;
 
-	      if (sd_save ==0 ){
-            sd = fopen("/fs/microsd/Error_Data.txt","w");
-            fprintf(sd,"Position, Position_des, Position_Error and Rotation_Error:\n");
-            fclose(sd);
-            sd_save =1;
-            }
-
-            sd = fopen("/fs/microsd/Error_Data.txt","a");
-            fprintf(sd,"\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n",
-            (double)r(0),
-			(double)r(1),
-            (double)r_T(0),
-            (double)r_T(1),
-            (double)e_p(0),
-			(double)e_p(1),
-			(double)e_r(0),
-			(double)e_r(1));
-            fclose(sd);
-*/
 
 //	}
 
@@ -1501,7 +1184,7 @@ float C_MIX_sim[4][4]= {
     _logging_hippocampus.e_v[2] = e_v(2);
     _logging_hippocampus.e_w[0] = _omega(0);
     _logging_hippocampus.e_w[1] = _omega(1);
-    _logging_hippocampus.e_w[2] = _omega(2);
+    _logging_hippocampus.e_w[2] = _v_att.yawspeed;
     _logging_hippocampus.u_in[0] = _actuators.control[0];
     _logging_hippocampus.u_in[1] = _actuators.control[1];
     _logging_hippocampus.u_in[2] = _actuators.control[2];
@@ -1514,7 +1197,7 @@ float C_MIX_sim[4][4]= {
     _logging_hippocampus.pitch_out[1] = _pitch_d;
     _logging_hippocampus.pitch_out[2] = _depth_p;
     _logging_hippocampus.pitch_out[3] = _params.depth_i_gain * _depth_i;
-    _logging_hippocampus.pitch_out[4] = _params.depth_d_gain * _depth_smo;
+    _logging_hippocampus.pitch_out[4] = _params.depth_d_gain * _omega(1);
     _logging_hippocampus.pitch_out[5] = _depth_pid ;
     _logging_hippocampus.roll_out[0] = _roll_p;
     _logging_hippocampus.roll_out[1] = _roll_d;
