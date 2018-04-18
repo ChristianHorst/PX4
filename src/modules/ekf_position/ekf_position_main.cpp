@@ -319,6 +319,7 @@ void Read_EKF_Data::ekf_update_poll()
                        (double)subscribed_ekf_vector.EKF_pos_y);
         */
         /*
+        //save on sd card
         FILE *sd;
          if (sd_save ==0 ){
             sd = fopen("/fs/microsd/Position_Data.txt","w");
@@ -335,21 +336,21 @@ void Read_EKF_Data::ekf_update_poll()
         */
         /* Print the updatet absolut position and ekf covariance*/
 
-                                n=n+1;
-                                if (n > 30) {
-                                                PX4_INFO("EKF_Position:\t%.4f\t%.4f",
-                                                               (double)subscribed_ekf_vector.EKF_pos_x,
-                                                               (double)subscribed_ekf_vector.EKF_pos_y);
-                                                                                   n=1;
-                                            }
+                n=n+1;
+                if (n > 30) {
+                                PX4_INFO("EKF_Position:\t%.4f\t%.4f",
+                                               (double)subscribed_ekf_vector.EKF_pos_x,
+                                               (double)subscribed_ekf_vector.EKF_pos_y);
+                                                                   n=1;
+                            }
 
 
 
-        /*Without rotation*/
+        /*Without coordinate transformation*/
         _mocap_vec.x = subscribed_ekf_vector.EKF_pos_x/1000;
         _mocap_vec.y = subscribed_ekf_vector.EKF_pos_y/1000;
 
-        /*With rotation from antenna to bodycenter coordinates*/
+        /*With transformation from antenna to bodycenter coordinates*/
 
         if (_params.trans == 1){
             _mocap_vec.x = _mocap_vec.x + x_B(0)*_dist_antenna;
@@ -374,30 +375,11 @@ void Read_EKF_Data::ekf_update_poll()
 /*
         orb_copy(ORB_ID(att_pos_mocap), att_pos_mocap_int, &_mocap_vec);
 */
-        /* give the mocap topic the new values*/
+        /* give the mocap topic the new values with depth transformation to bodycenter coordinates */
 
 
         _mocap_vec.z = water_depth + x_B(2)*0.21f;
 
-
-    //save to sd-card
-/*
-        FILE *sd;
-         if (sd_save ==0 ){
-            sd = fopen("/fs/microsd/Position_Data.txt","w");
-            fprintf(sd,"Mocap_Pos_Trans and EKF_Pos_Ant and rotation_vec:\n");
-            fclose(sd);
-            sd_save =1;
-            }
-
-            sd = fopen("/fs/microsd/Position_Data.txt","a");
-            fprintf(sd,"\t%.4f\t%.4f\t%.4f\t%.4f\n",
-            (double)_mocap_vec.x,
-            (double)_mocap_vec.y,
-            (double)subscribed_ekf_vector.EKF_pos_x,
-            (double)subscribed_ekf_vector.EKF_pos_y);
-            fclose(sd);
-*/
 
 }
 

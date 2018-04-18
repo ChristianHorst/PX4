@@ -428,7 +428,7 @@ void HippocampusTrajectoryPlanner::point()
          }
 */
 }
-// This function gives back a simple point
+// This function gives back sequence of waypoints and change the waypoint to the next one if the position error is smaller than _params.ellipse_maxerror
 void HippocampusTrajectoryPlanner::ellipse()
 {
     bool updated;
@@ -450,7 +450,7 @@ void HippocampusTrajectoryPlanner::ellipse()
   float y_set_point1[4] = {0.65, 0.65, 1.25, 1.25};
 
 
-//WAY-Points swimm
+
     //Square
  //  float x_set_point2[4] = {-0.30, 2.30, 2.30, -0.30};
  //  float y_set_point2[4] = {-0.20, -0.20, 1.20, 1.20};

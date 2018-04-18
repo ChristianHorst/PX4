@@ -770,6 +770,8 @@ void HippocampusPathControl::trajectory_setpoint_poll()
 	}
 }
 
+//params for SMO
+
 float HippocampusPathControl::get_xhat2(float x1, float time) {
 
     _xhat1 = get_xhat1(x1, time);
@@ -781,7 +783,7 @@ float HippocampusPathControl::get_xhat2(float x1, float time) {
     return _xhat2; //xhat2 = geschätzte Geschwindigkeit
 }
 
-
+//params for SMO
 float HippocampusPathControl::get_xhat1(float x1, float time) {
     //xhat1 = xhat1_prev - (iterationtime / 0.1) * rho * sat(xhat1_prev - x1, 1);
     _xhat1 = _xhat1_prev - (time / 1) * _params.rho * sat(_xhat1_prev - x1, _params.phi);
@@ -789,7 +791,7 @@ float HippocampusPathControl::get_xhat1(float x1, float time) {
     return _xhat1;
 }
 
-// sat functio
+// sat function
 float HippocampusPathControl::sat(float x, float gamma) {
     float y = math::max(math::min(1.0f, x / gamma), -1.0f);
     return y;
@@ -929,16 +931,22 @@ void HippocampusPathControl::path_control(float dt)
     //euler angles
     matrix::Eulerf euler = matrix::Quatf(_v_att.q);
 
+//The actual controller as described in the master thesis "Position Estimation and Control of Autonomous Underwater Robots"
+
 if (!strcmp(type_array, "WS")) {
 
-	    //YAW_Control
+	    //YAW CONTROL
         float e_r_1;
         //float e_r_2;
+
+        //calculates desired yaw angle
 	    float psi_des = atan2f(r_T(1)-r(1),r_T(0)-r(0));
 	    //e_r(2) = psi_des-euler.psi();
 
+        //yaw error
         e_r_1 = psi_des-euler.psi();
 
+        //find the smallest error
         if(e_r_1>3.1416f){
             e_r(2) = (e_r_1-3.1416f*2.0f);
             }else if(e_r_1<-3.1416f){
@@ -952,17 +960,17 @@ if (!strcmp(type_array, "WS")) {
         e_w (2) = -_v_att.yawspeed  ;
 
 
-            /* Calculate P-term of PD-Controller (Roll) */
+            /* Calculate P-term of PD-Controller (YAW) */
             _yaw_p = e_r(2) * _params.yaw_gain;
 
-            /* Calculate D-term of PD-Controller (Roll) */
+            /* Calculate D-term of PD-Controller (YAW) */
             _yaw_d = e_w (2) * _params.yaw_rate_gain;
 
             /* Calculate PD-Controller */
             _yaw_pd = _yaw_p + _yaw_d;
 
 
-        //TOBIS PITCH CONTROL
+        //Tobis PITCH CONTROL
    //matrix::Eulerf euler = matrix::Quatf(_v_att.q);
 
         /* get current rates from sensors */
@@ -981,7 +989,7 @@ if (!strcmp(type_array, "WS")) {
                 _counter = 0;
             }
 
-            /* set actual pressure from the sensor and absolute time to a new controler value */
+            /* set actual pressure from the sensor and absolute time to a new controller value */
             _pressure_new = _press.pressure_mbar;
             //_pressure_new = 1;
             _pressure_time_new = hrt_absolute_time();
@@ -1025,7 +1033,7 @@ if (!strcmp(type_array, "WS")) {
         _depth_pid = _params.depth_p_gain *_depth_p + _params.depth_i_gain * _depth_i +  _params.depth_d_gain *_depth_d;
 
 
-        /**< Attitude Controller: Roll */
+        /**< Attitude Controller: Roll> */
 
             /* Calculate measured roll angle in degree */
             _roll_angle = euler.phi()*( 180.0f/3.146f);
@@ -1041,8 +1049,7 @@ if (!strcmp(type_array, "WS")) {
             /* Calculate PD-Controller */
             _roll_pd = _roll_p + _roll_d;
 
-                //Scale
-                //_roll_pd = _roll_pd * 0.01f;
+
 
         //TRHUST CONTROL
         e_p = r - r_T;                      // calculate position error
@@ -1056,6 +1063,7 @@ if (!strcmp(type_array, "WS")) {
 
 	    u_1 = F_des * x_B;
 
+        //if params.noback == 1 the controller allows only thrust in forward direction
         if (_params.no_back == 1){
             if (u_1<0.0f){
             u_1 = 0.0f;
@@ -1064,12 +1072,14 @@ if (!strcmp(type_array, "WS")) {
         }
 
 
+        //optionally Scaling the control outputs
+
             //Define own Scaling vector to avoid saturation
 
-                float m1 = -_roll_pd - _depth_pid +_yaw_pd + u_1;
-                float m2 = -_roll_pd + _depth_pid +_yaw_pd - u_1;
-                float m3 = -_roll_pd + _depth_pid -_yaw_pd + u_1;
-                float m4 = -_roll_pd - _depth_pid -_yaw_pd - u_1;
+        float m1 = -_roll_pd - _depth_pid +_yaw_pd + u_1;
+        float m2 = -_roll_pd + _depth_pid +_yaw_pd - u_1;
+        float m3 = -_roll_pd + _depth_pid -_yaw_pd + u_1;
+        float m4 = -_roll_pd - _depth_pid -_yaw_pd - u_1;
 
         float motor_output[4] = {m1,m2,m3,m4};
         float max_output = 0.0f;
@@ -1080,6 +1090,7 @@ if (!strcmp(type_array, "WS")) {
         }
 
 
+    //there is no scaling for params.scale > 2, as used in Viktor Rausch master's thesis
 
     if (_params.scale == 0){
       _roll_pd      = _roll_pd*0.6666f;
@@ -1130,7 +1141,7 @@ if (!strcmp(type_array, "WS")) {
 
 
     //Actuator Control for uncoupled Controler
-
+    //set _params.pi_ro_only to 0 or 2 to allow full control or to 1 to allow pitch/roll controll with constant thrust and yaw
 	        _actuators.control[0] = _roll_pd * _params.OG_roll;       // roll
             _actuators.control[1] = _depth_pid  * _params.OG_pitch;   // pitch
             _actuators.control[2] =  _yaw_pd * _params.OG_yaw;        // yaw
